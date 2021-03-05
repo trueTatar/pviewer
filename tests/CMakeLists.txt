@@ -1,0 +1,5 @@
+add_executable(testing PhotoViewer_test.cpp)
+find_package(GTest REQUIRED)
+find_package(Qt5 COMPONENTS Widgets REQUIRED)
+add_test(NAME testing COMMAND testing)
+target_link_libraries(testing GTest::GTest Qt5::Widgets lib)

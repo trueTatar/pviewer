@@ -2,9 +2,14 @@
 #define SELECTINGDIALOG_HPP
 
 #include <QDialog>
+#include <QCheckBox>
+#include <QClipboard>
 #include <QDir>
+#include <QFileDialog>
 
-#include <QtWidgets>
+#include <QDebug>
+#include "lists.h"
+#include "move.h"
 
 #include "global_path.hpp"
 
@@ -14,7 +19,7 @@ class QKeyEvent;
 
 class Mode {
 private:
-  static QCheckBox* check;
+  inline static QCheckBox* check = nullptr;
 public:
   static QCheckBox* checkBox() {
     if (check == nullptr) {
@@ -37,7 +42,6 @@ public:
 };
 
 class Manual : public Mode {
-  const QString g_basicPath = "/home/user/Pictures/";
 private:
   QObject* parent;
   QWidget* widget() { return dynamic_cast<QWidget*>(parent); }
@@ -59,51 +63,11 @@ protected:
   }
 };
 
-class FolderA {
-protected:
-  static int index_;
-  static QStringList list_;
-public:
-  static void setFolder(const QStringList& l) {
-    list_ = l;
-  }
-  static QDir folder() {
-    return list_.at(index_);
-  }
-  virtual void moveIndex() = 0;
-  virtual bool possibleToMoveIndex() = 0;
-  virtual QString errorMessage() = 0;
-};
-
-class NextFolder : public FolderA {
-public:
-  bool possibleToMoveIndex() override {
-    return FolderA::possibleToMoveIndex() && (index_ != list_.size() - 1);
-  }
-  void moveIndex() override { ++index_; }
-  QString errorMessage() override { return "there is no next folder"; }
-};
-
-class PreviousFolder : public FolderA {
-public:
-  bool possibleToMoveIndex() override {
-    return FolderA::possibleToMoveIndex() && (index_ != 0);
-  }
-  void moveIndex() override { --index_; }
-  QString errorMessage() override { return "there is no previous folder"; }
-};
-
 class SelectingDialog : public QDialog {
   Q_OBJECT
 private:
-  QStringList pixmapList;
-  QMessageBox* messageBox;
-
-  void display(QString, int);
-  void createFolderNameMB();
-  void convertPathsToAbsolute(QDir, QStringList&);
-  void sortItems(QStringList&);
-
+  void convertPathsToAbsolute(QDir, QList<QString>&);
+  void sortItems(QList<QString>&);
   QPushButton* createButton(QString);
   QPushButton* createButton(QString, void(SelectingDialog::*)());
 
@@ -115,12 +79,18 @@ protected:
   void keyPressEvent(QKeyEvent*) override;
 public:
   SelectingDialog(QWidget* = nullptr);
-  void goTo(std::unique_ptr<FolderA>);
+  void AssociateWith(std::shared_ptr<FolderPath> p) {
+    connect(p.get(), &FolderPath::folderIsChanged, [this] (QDir dir) {
+      slotDirectory(std::make_unique<FromParameter>(dir));
+    });
+  }
   void setDirectory(QString);
+  void setImages(QList<QString>);
 signals:
-  void folderIsChanged();
-  void stringListPrepared(QStringList);
+  void updateFolderList(QStringList);
+  void stringListPrepared(QList<QString>);
   void downloadChosen();
 };
+
 
 #endif // SELECTINGDIALOG_HPP

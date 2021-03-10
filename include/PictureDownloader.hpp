@@ -33,7 +33,6 @@ public:
       }
     }
     return path_;
-    
   }
   void reset() { path_.clear(); }
 signals:

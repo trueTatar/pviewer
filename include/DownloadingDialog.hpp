@@ -19,7 +19,7 @@ class Link;
 
 class RestrictedLayout : public QStackedLayout {
 public:
-  QSize minimumSize() const
+  QSize minimumSize() const override
   {
     QSize s(0, 0);
     int n = count();

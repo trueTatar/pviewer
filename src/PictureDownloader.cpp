@@ -1,12 +1,10 @@
-#include "PictureDownloader.hpp"
-
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QSslConfiguration>
 #include <QSslSocket>
-#include <QDir>
 #include <QMessageBox>
 #include <QMetaEnum>
+#include "PictureDownloader.hpp"
 #include "DownloadingDialog.hpp"
 
 void PictureDownloader::createConnections()

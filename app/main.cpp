@@ -1,31 +1,42 @@
-#include <QHostInfo>
 #include <QApplication>
 
-#include "PhotoScroller.hpp"
+#include "scroller.h"
+#include <iostream>
 
 #define SELECTOR 1
 
+Scroller* CreateScroller(int argc, char* argv[]) {
+  QString default_folder = "/home/user/Pictures/cosplay/cosplay1/";
+  if (argc > 1 && QFileInfo(argv[1]).isDir()) {
+    int start = argc == 3 ? QString(argv[2]).toInt() : 0;
+    return new Scroller(argv[1], start);
+  } else if (argc > 1) {
+    QList<QString> images;
+    for (int i = 1; i < argc; ++i) {
+      QString filename = argv[i];
+      QFileInfo info(filename);
+      if (!info.isFile()) {
+        std::cout << '\'' << filename.toStdString() << '\'' << " is not a file\nAborting..." << std::endl;
+        exit(1);
+      }
+      QString s = info.suffix();
+      if (s == "jpg" || s == "png" || s == "jpeg") {
+        images.append(filename);
+      }
+    }
+    return new Scroller(images);
+  } else {
+    return new Scroller(default_folder);
+  }
+}
+
 #if SELECTOR == 1
 
-int main( int argc, char* argv[] )
-{
-  QApplication app( argc, argv );
-
-  QString p = "/home/user/Pictures/cosplay/bulma_bunny_girl/";
-  PhotoScroller* ps = argc > 1 ? new PhotoScroller(argv[1]) : new PhotoScroller(p);
+int main(int argc, char* argv[]) {
+  QApplication app(argc, argv);
+  Scroller* ps = CreateScroller(argc, argv);
   ps->setWindowState(Qt::WindowMaximized | Qt::WindowFullScreen);
-  /*
-  PhotoScroller* ps;
-  if (argc > 1) {
-    ps = new PhotoScroller( argv[1], QString(argv[2]).toInt() );
-  } else {
-    ps = new PhotoScroller;
-  }
-  */
-
-  //ps->setWindowState(Qt::WindowFullScreen);
   ps->show();
-
   return app.exec();
 }
 

@@ -1,4 +1,4 @@
-add_executable(pviewer $<TARGET_OBJECTS:lib> main.cpp)
+add_executable(pviewer $<TARGET_OBJECTS:lib> main.cc)
 find_package(Qt5 COMPONENTS Widgets Network REQUIRED)
 target_compile_features(pviewer PRIVATE cxx_std_20)
 target_link_libraries(pviewer PRIVATE Qt5::Widgets Qt5::Network)

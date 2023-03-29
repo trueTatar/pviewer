@@ -1,16 +1,15 @@
 #pragma once
 
-#include <QString>
+#include <QDir>
 #include <QLabel>
 #include <QScreen>
-#include <QDir>
+#include <QString>
 
-#include "order.hpp"
-#include "abstract_paths.hpp"
+#include "abstract_image_location.hpp"
 
 class ImagePath : public CPathBase {
  public:
-  ImagePath() : CPathBase(-1) { }
+  ImagePath() : CPathBase(-1) {}
   QString imageNumber() {
     QString info;
     if (initialState<NumericalOrder>()) {
@@ -29,7 +28,7 @@ class ImagePath : public CPathBase {
 class FolderPath : public CPathBase {
   Q_OBJECT
  public:
-  FolderPath() : CPathBase(0) { }
+  FolderPath() : CPathBase(0) {}
   void sendNewFolder() {
     QDir dir = pathByIndex();
     emit folderIsChanged(dir);
@@ -37,4 +36,3 @@ class FolderPath : public CPathBase {
  signals:
   void folderIsChanged(QDir);
 };
-

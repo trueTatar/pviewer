@@ -1,5 +1,5 @@
 add_executable(pviewer $<TARGET_OBJECTS:lib> main.cc)
-find_package(Qt5 COMPONENTS Widgets Network REQUIRED)
+find_package(Qt5 COMPONENTS Widgets Network Concurrent REQUIRED)
 target_compile_features(pviewer PRIVATE cxx_std_20)
-target_link_libraries(pviewer PRIVATE Qt5::Widgets Qt5::Network)
+target_link_libraries(pviewer PRIVATE Qt5::Widgets Qt5::Network Qt5::Concurrent)
 target_include_directories(pviewer PRIVATE ../include/)

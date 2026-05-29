@@ -2,10 +2,12 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QFuture>
+#include <QImage>
 #include <QLabel>
 #include <QObject>
 #include <QScreen>
-#include <future>
+#include <QtConcurrent>
 
 #include "abstract_image_cache.hpp"
 #include "abstract_image_location.hpp"
@@ -26,19 +28,26 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
   void PopFront() override {
     source_.pop_front();
     scaled_.pop_front();
+    pending_.pop_front();
   }
   void PopBack() override {
     source_.pop_back();
     scaled_.pop_back();
+    pending_.pop_back();
   }
   std::size_t Size() const override { return source_.size(); }
+  // Push only schedules the decode on the global thread pool and stores an
+  // empty placeholder. The expensive QImage decode runs off the GUI thread;
+  // the QPixmap is materialized lazily on first access (see ResolvedSource).
   void Push(pointer_t op, info_t value) override {
-    qDebug() << "-- Caching";
-    qDebug() << "Image:" << *value;
-    qDebug() << "Cache size before operation:" << source_.size();
-    (source_.*op)(*value);
+    constexpr pointer_t push_front_op = &QList<QPixmap>::push_front;
+    const QString path = *value;
+    qDebug() << "-- Caching (async)" << path;
+    QFuture<QImage> future = QtConcurrent::run([path] { return QImage(path); });
+    (source_.*op)(QPixmap{});
     (scaled_.*op)(QPixmap{});
-    qDebug() << "Cache size after operation:" << source_.size();
+    op == push_front_op ? pending_.push_front(future)
+                        : pending_.push_back(future);
   }
   // TODO give some normal, descriptive name
   void SetImageSizePasser(std::function<void()> save,
@@ -51,6 +60,9 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
   QPixmap ScaleImageToScreenWidth(int index);
   const QPixmap& Image(int index);
   const QPixmap& ScaledImage(int index);
+  // Materializes the QPixmap for a slot the first time it is needed. Blocks on
+  // the decode future only if that particular image is not ready yet.
+  const QPixmap& ResolvedSource(int index);
   void Clear() override;
 
   std::function<void(QPixmap const&)> UpdateImage;
@@ -60,6 +72,7 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
   bool is_scaled_;
   QList<QPixmap> scaled_;
   QList<QPixmap> source_;
+  QList<QFuture<QImage>> pending_;
 };
 
 inline CachedImagesList::CachedImagesList(std::size_t capacity,
@@ -74,6 +87,9 @@ inline CachedImagesList::CachedImagesList(std::size_t capacity,
 inline void CachedImagesList::Clear() {
   source_.clear();
   scaled_.clear();
+  // Outstanding decodes are simply dropped; their results are pulled by slot
+  // index, so a discarded future can never land in a stale slot.
+  pending_.clear();
 }
 
 inline void CachedImagesList::scale() { is_scaled_ = !is_scaled_; }
@@ -108,11 +124,17 @@ inline QPixmap const& CachedImagesList::ScaledImage(int index) {
   return scaled_.at(index);
 }
 
+inline const QPixmap& CachedImagesList::ResolvedSource(int index) {
+  if (source_.at(index).isNull())
+    source_[index] = QPixmap::fromImage(pending_.at(index).result());
+  return source_.at(index);
+}
+
 inline const QPixmap& CachedImagesList::Image(int index) {
-  return is_scaled_ ? ScaledImage(index) : source_.at(index);
+  return is_scaled_ ? ScaledImage(index) : ResolvedSource(index);
 }
 
 inline QPixmap CachedImagesList::ScaleImageToScreenWidth(int index) {
-  return source_.at(index).scaledToWidth(ScreenWidth(),
-                                         Qt::SmoothTransformation);
+  return ResolvedSource(index).scaledToWidth(ScreenWidth(),
+                                             Qt::SmoothTransformation);
 }

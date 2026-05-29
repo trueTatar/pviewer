@@ -11,14 +11,7 @@ using images_task_t = std::tuple<int, int, int, info_storage_test_t>;
 class InitialImagesTask : public testing::TestWithParam<images_task_t> {};
 
 bool operator==(const queue_storage_t& lhs, const info_storage_test_t& rhs) {
-  auto r = rhs.begin();
-  for (auto ref : lhs) {
-    if (*ref != *r) return false;
-    ++r;
-  }
-  return true;
-}
-bool operator==(const queue_storage_t& lhs, const image_storage_test_t& rhs) {
+  if (lhs.size() != rhs.size()) return false;
   auto r = rhs.begin();
   for (auto ref : lhs) {
     if (*ref != *r) return false;
@@ -58,7 +51,9 @@ TEST_P(CacheBuilding, TrueTesting) {
   auto image_cache = file_info->CreateCacheObject<FakeCachedImageList>(
       cache_capacity, *file_info);
   image_cache->ProcessTaskQueue(reference);
-  EXPECT_EQ(reference.queue_, cache);
+  // ProcessTaskQueue drains the task queue, so the populated cache -- not the
+  // now-empty queue -- is what must match the expected contents.
+  EXPECT_EQ(image_cache->cache_, cache);
 }
 
 auto images_task = testing::Values(

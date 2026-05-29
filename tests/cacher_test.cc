@@ -88,9 +88,9 @@ struct ImageChanging : public ::testing::Test {
   using NextImage = ImageBase<NumericalOrder, info_test_t, image_test_t>;
   using PreviousImage = ImageBase<ReverseOrder, info_test_t, image_test_t>;
   image_storage_test_t& Cache() { return image_cache_->cache_; }
-  int Index() { return *file_info_->Index(); }
-  int LeftEdge() { return *image_cache_->LeftEdge(); }
-  int RightEdge() { return *image_cache_->RightEdge(); }
+  int Index() { return file_info_->Index()->value_; }
+  int LeftEdge() { return image_cache_->LeftEdge()->value_; }
+  int RightEdge() { return image_cache_->RightEdge()->value_; }
 
  public:
   std::shared_ptr<FakeImagePathList> file_info_;
@@ -109,7 +109,7 @@ struct ImageChanging : public ::testing::Test {
     move_->moveTo<ImageNumber>(index);
   }
   template <typename WhereTo, typename... Args>
-  int moveTo(Args... args) {
+  Step moveTo(Args... args) {
     return move_->moveTo<WhereTo>(args...);
   }
   template <typename WhereTo>

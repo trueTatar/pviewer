@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <ostream>
 
 #include "abstract_image_cache.hpp"
 #include "abstract_image_location.hpp"
@@ -13,17 +14,28 @@
 #include "images_navigator.hpp"
 
 struct Image {
-  Image(int value) : value_(value) {}
-  operator int() const { return value_; }
+  Image(int value) : value_(value) {}  // implicit: keeps expected data terse
   int value_;
 };
+inline bool operator==(Image a, Image b) { return a.value_ == b.value_; }
+inline std::ostream &operator<<(std::ostream &os, Image image) {
+  return os << "Image(" << image.value_ << ')';
+}
 
 struct Info {
-  Info(int value) : value_(value) {}
-  operator int() const { return value_; }
-  operator Image() const { return value_; }
+  Info(int value) : value_(value) {}  // implicit: keeps expected data terse
   int value_;
 };
+inline bool operator==(Info a, Info b) { return a.value_ == b.value_; }
+inline std::ostream &operator<<(std::ostream &os, Info info) {
+  return os << "Info(" << info.value_ << ')';
+}
+
+// The image obtained by "decoding" a location: the test-double analogue of
+// turning a QString path into a QPixmap. Explicit on purpose (the old code hid
+// it inside an implicit Info->Image conversion), so a location and an image can
+// no longer be silently interchanged.
+inline Image Decode(Info info) { return Image(info.value_); }
 
 using image_test_t = Image;
 using info_test_t = Info;
@@ -77,7 +89,7 @@ class FakeImagePathList
   }
   int size() const override { return file_info_.size(); }
   bool isEmpty() const override { return file_info_.empty(); }
-  int Image() { return file_info_.at(Pos()); }
+  int Image() { return file_info_.at(Pos()).value_; }
   info_t Begin() override { return file_info_.begin(); }
   info_t End() override { return file_info_.end(); }
   const_info_t CBegin() const override { return file_info_.begin(); }
@@ -108,7 +120,7 @@ class FakeCachedImageList
   void PopFront() override { cache_.pop_front(); }
   void PopBack() override { cache_.pop_back(); }
   std::size_t Size() const override { return cache_.size(); }
-  void Push(pointer_t op, info_t value) override { (cache_.*op)(*value); }
+  void Push(pointer_t op, info_t value) override { (cache_.*op)(Decode(*value)); }
 
  public:
   QList<image_test_t> cache_;
@@ -148,7 +160,7 @@ struct ViewerFixture : public ::testing::Test {
     images_->CacheImage();
   }
   template <typename WhereTo, typename... Args>
-  int moveTo(Args... args) {
+  Step moveTo(Args... args) {
     return move_->moveTo<WhereTo>(args...);
   }
   template <typename WhereTo>
@@ -156,7 +168,11 @@ struct ViewerFixture : public ::testing::Test {
     for (int i = 0; i != time; ++i)
       performed_operations_.push_back(moveTo<WhereTo>());
   }
-  using expected_t = std::vector<int>;
+  // The two result vectors mean different things, so they get distinct types:
+  // displayed_t is the sequence of image identities shown to the user, steps_t
+  // is the sequence of navigation outcomes (Step flags).
+  using displayed_t = std::vector<int>;
+  using steps_t = std::vector<Step>;
   auto const& DisplayingResults() const {
     return cache_->displaying_test_result;
   }
@@ -166,5 +182,5 @@ struct ViewerFixture : public ::testing::Test {
   std::shared_ptr<FakeImagePathList> images_;
   std::shared_ptr<FakeCachedImageList> cache_;
   std::unique_ptr<move_t> move_;
-  std::vector<int> performed_operations_;
+  steps_t performed_operations_;
 };

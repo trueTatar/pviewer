@@ -74,7 +74,7 @@ class CachedImagesListTest : public ::testing::Test {
   }
 
   template <typename Where, typename... Args>
-  int Go(Args... args) {
+  Step Go(Args... args) {
     return move_->moveTo<Where>(args...);
   }
 

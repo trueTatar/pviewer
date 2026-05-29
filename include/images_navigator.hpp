@@ -1,10 +1,50 @@
 #pragma once
 
+#include <ostream>
+
 #include "abstract_image_cache.hpp"
 #include "lists.hpp"
 #include "messagebox.hpp"
 
 using folder_info_t = std::shared_ptr<FolderPath>;
+
+// Outcome of a single navigation step, as a set of flags. This is consumed
+// only by the tests (production ignores moveTo's return value); it replaces the
+// former additive magic integers so assertions and failures read in plain
+// terms, e.g. Enqueue|Move|Forward instead of 11.
+enum class Step : unsigned {
+  None = 0,
+  Forward = 1u << 0,
+  Backward = 1u << 1,
+  Move = 1u << 2,        // advanced the index and displayed the new image
+  ShowCached = 1u << 3,  // displayed the already-cached current image
+  Enqueue = 1u << 4,     // pushed a new image into the cache task queue
+  HideAtEdge = 1u << 5,  // hid the image when stepping past a list edge
+};
+
+constexpr Step operator|(Step a, Step b) {
+  return static_cast<Step>(static_cast<unsigned>(a) | static_cast<unsigned>(b));
+}
+constexpr Step& operator|=(Step& a, Step b) { return a = a | b; }
+
+inline std::ostream& operator<<(std::ostream& os, Step step) {
+  if (step == Step::None) return os << "None";
+  const unsigned bits = static_cast<unsigned>(step);
+  const char* separator = "";
+  auto append = [&](Step flag, const char* name) {
+    if (bits & static_cast<unsigned>(flag)) {
+      os << separator << name;
+      separator = "|";
+    }
+  };
+  append(Step::Forward, "Forward");
+  append(Step::Backward, "Backward");
+  append(Step::Move, "Move");
+  append(Step::ShowCached, "ShowCached");
+  append(Step::Enqueue, "Enqueue");
+  append(Step::HideAtEdge, "HideAtEdge");
+  return os;
+}
 
 template <typename Order, typename In, typename Im>
 class ImageBase;
@@ -27,7 +67,7 @@ class ImagesNavigator {
                  std::function<bool()> is_null_image)
       : is_null_image_(is_null_image), file_info_(i), cache_(c), folders_(f) {}
   template <typename WhereTo, typename... Args>
-  int moveTo(Args... args) {
+  Step moveTo(Args... args) {
     if constexpr (std::is_same_v<WhereTo, NextImage> ||
                   std::is_same_v<WhereTo, PreviousImage>) {
       return WhereTo(*file_info_, *cache_, is_null_image_).Result();
@@ -37,7 +77,7 @@ class ImagesNavigator {
                                                  cached_images_t&, Args...>) {
       WhereTo w(*file_info_, *cache_, args...);
     }
-    return 0;
+    return Step::None;
   }
 
  private:
@@ -102,15 +142,16 @@ class ImageBase {
   ImageBase(Abstract::ImageLocation<In, Im>& location,
             Abstract::ImageCache<In, Im>& cache,
             std::function<bool()> is_null_image)
-      : result_(0) {
+      : result_(Step::None) {
     int direction = Order::step;
+    Step dir = direction > 0 ? Step::Forward : Step::Backward;
     if (location.ImageHideNeeded(direction)) {
-      result_ += direction > 0 ? 1000 : 2000;
+      result_ = Step::HideAtEdge | dir;
       cache.HideImage();
       return;
     }
     if (location.DisplayCachedImageNeeded(direction) && is_null_image()) {
-      result_ += direction > 0 ? 100 : 200;
+      result_ = Step::ShowCached | dir;
       cache.DisplayImage();
       return;
     }
@@ -120,20 +161,20 @@ class ImageBase {
       auto iter = location.Index();
       std::advance(iter, shift);
       if (location.Begin() <= iter && iter < location.End()) {
-        result_ += 10;
+        result_ |= Step::Enqueue;
         direction > 0 ? task_queue.template Push<Back>(iter)
                       : task_queue.template Push<Front>(iter);
         cache.ProcessTaskItem(task_queue);
         cache.RemoveOutdated(direction);
       }
     }
-    result_ += direction > 0 ? 1 : 2;
+    result_ |= Step::Move | dir;
     cache.DisplayImage();
   }
-  int Result() { return result_; }
+  Step Result() { return result_; }
 
  private:
-  int result_;
+  Step result_;
 };
 
 template <typename Impl>

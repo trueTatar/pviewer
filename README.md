@@ -43,6 +43,7 @@ pviewer [images]...
 - **]**: go to next folder (if subdirectories were loaded)
 - **[**: go to previous folder (if subdirectories were loaded)
 - **s**: scale image to screen width and back to the standard image width
+- **+ / =**: zoom in; **-**: zoom out (relative to the fit-to-width view); **0**: reset zoom to fit. The zoom level is shared across images, so switching between them keeps the same scale for comparison.
 - **Right_Arrow + Ctrl**: display the next image
 - **Left_Arrow + Ctrl**: display the previous image
 - **o**: open dialog window, which allows choosing content to display

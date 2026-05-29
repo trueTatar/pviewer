@@ -9,6 +9,7 @@
 #include <QPainter>
 #include <QScreen>
 #include <QtConcurrent>
+#include <algorithm>
 
 #include "abstract_image_cache.hpp"
 #include "abstract_image_location.hpp"
@@ -19,7 +20,14 @@ using screen_width_t = std::function<int()>;
 class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
  public:
   CachedImagesList(std::size_t, info_t const&, update_image_t, screen_width_t);
+  // Toggles between native (1:1 source) and the fit-to-width * zoom view.
   void scale();
+  // The zoom factor is shared across all cached images (a property of the
+  // comparison session, not of one image): the displayed width is
+  // zoom_ * screen_width. Flipping between images therefore keeps the same
+  // on-screen scale, so a given content region lines up across the switch.
+  void zoomBy(double factor);
+  void resetZoom();
   bool isEmpty() const override { return source_.isEmpty(); }
 
   void DisplayImage() override;
@@ -62,7 +70,11 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
   }
 
  private:
-  QPixmap ScaleImageToScreenWidth(int index);
+  // On-screen width of the scaled view: zoom_ * screen_width, clamped so a huge
+  // zoom can't allocate an unbounded pixmap (this view re-rasterizes the whole
+  // image rather than transforming a view).
+  int TargetWidth() const;
+  QPixmap ScaleImageToWidth(int index);
   const QPixmap& Image(int index);
   const QPixmap& ScaledImage(int index);
   // Materializes the QPixmap for a slot the first time it is needed. Blocks on
@@ -76,8 +88,13 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
   std::function<void(QPixmap const&)> UpdateImage;
   std::function<void()> save_scroll_position_;
   std::function<void(QSize)> restore_scroll_position_;
+  static constexpr double kMinZoom = 0.1;
+  static constexpr double kMaxZoom = 8.0;
+  static constexpr int kMaxScaledWidth = 8192;
+
   std::function<int()> ScreenWidth;
   bool is_scaled_;
+  double zoom_;
   QList<QPixmap> scaled_;
   QList<QPixmap> source_;
   QList<QFuture<QImage>> pending_;
@@ -90,7 +107,8 @@ inline CachedImagesList::CachedImagesList(std::size_t capacity,
     : ImageCache(image, capacity),
       UpdateImage(update_image),
       ScreenWidth(screen_width),
-      is_scaled_(false) {}
+      is_scaled_(false),
+      zoom_(1.0) {}
 
 inline void CachedImagesList::Clear() {
   source_.clear();
@@ -102,8 +120,23 @@ inline void CachedImagesList::Clear() {
 
 inline void CachedImagesList::scale() { is_scaled_ = !is_scaled_; }
 
+inline void CachedImagesList::zoomBy(double factor) {
+  zoom_ = std::clamp(zoom_ * factor, kMinZoom, kMaxZoom);
+  is_scaled_ = true;  // zooming implies the scaled view
+}
+
+inline void CachedImagesList::resetZoom() {
+  zoom_ = 1.0;  // back to plain fit-to-width
+  is_scaled_ = true;
+}
+
+inline int CachedImagesList::TargetWidth() const {
+  const int width = static_cast<int>(zoom_ * ScreenWidth());
+  return std::clamp(width, 1, kMaxScaledWidth);
+}
+
 inline void CachedImagesList::UpdateCurrentScaledImage() {
-  scaled_[index()] = ScaleImageToScreenWidth(index());
+  scaled_[index()] = ScaleImageToWidth(index());
 }
 
 inline void CachedImagesList::DisplayImage() {
@@ -127,8 +160,9 @@ inline void CachedImagesList::HideImage() {
 }
 
 inline QPixmap const& CachedImagesList::ScaledImage(int index) {
-  int image_width = scaled_.at(index).size().width();
-  if (image_width != ScreenWidth()) {
+  // Recompute when the cached scaled pixmap no longer matches the current
+  // target width (screen change or a zoom step invalidated it).
+  if (scaled_.at(index).size().width() != TargetWidth()) {
     UpdateCurrentScaledImage();
   }
   return scaled_.at(index);
@@ -157,7 +191,7 @@ inline const QPixmap& CachedImagesList::Image(int index) {
   return is_scaled_ ? ScaledImage(index) : ResolvedSource(index);
 }
 
-inline QPixmap CachedImagesList::ScaleImageToScreenWidth(int index) {
-  return ResolvedSource(index).scaledToWidth(ScreenWidth(),
+inline QPixmap CachedImagesList::ScaleImageToWidth(int index) {
+  return ResolvedSource(index).scaledToWidth(TargetWidth(),
                                              Qt::SmoothTransformation);
 }

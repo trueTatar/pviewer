@@ -64,6 +64,22 @@ void MainWindow::Construct() {
       cache.get()->DisplayImage();
     }
   });
+  connect(this, &MainWindow::zoomImage, [this, cache](double factor) {
+    if (!cache->isEmpty() && imageDisplayed()) {
+      sliders_state->SaveViewCenter();
+      cache.get()->zoomBy(factor);
+      cache.get()->DisplayImage();
+      sliders_state->RestoreViewCenter();
+    }
+  });
+  connect(this, &MainWindow::resetZoomImage, [this, cache] {
+    if (!cache->isEmpty() && imageDisplayed()) {
+      sliders_state->SaveViewCenter();
+      cache.get()->resetZoom();
+      cache.get()->DisplayImage();
+      sliders_state->RestoreViewCenter();
+    }
+  });
   connect(this, &MainWindow::repaintImage, [this, cache] {
     if (imageDisplayed()) {
       cache.get()->UpdateCurrentScaledImage();
@@ -136,6 +152,19 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
     }
     case Qt::Key_S: {
       emit scaleImage();
+      break;
+    }
+    case Qt::Key_Plus:
+    case Qt::Key_Equal: {
+      emit zoomImage(1.25);
+      break;
+    }
+    case Qt::Key_Minus: {
+      emit zoomImage(0.8);
+      break;
+    }
+    case Qt::Key_0: {
+      emit resetZoomImage();
       break;
     }
     case Qt::Key_Right: {

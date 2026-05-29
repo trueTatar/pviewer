@@ -50,6 +50,8 @@ class MainWindow : public QScrollArea {
  signals:
   void repaintImage();
   void scaleImage();
+  void zoomImage(double factor);
+  void resetZoomImage();
   void chooseFilesToOpen();
   void displayImageNumber();
 };
@@ -110,7 +112,7 @@ class MainWindow::SlidersState {
         horizontal_(horizontal),
         last_vertical_(0),
         last_horizontal_(0),
-        need_reset_(true) {}
+        need_reset_(false) {}
   void ToggleResetting() { need_reset_ = !need_reset_; }
   void SaveScrollPosition() {
     if (vertical_->value() || horizontal_->value()) {
@@ -129,11 +131,36 @@ class MainWindow::SlidersState {
     image_size_ = image;
   }
 
+  // Capture/restore the content point at the center of the viewport, as a
+  // fraction of the scrollable content. Used to anchor zoom on the center
+  // instead of the top-left corner: capture before re-rasterizing, restore
+  // once the new (larger/smaller) pixmap is laid out.
+  void SaveViewCenter() {
+    center_horizontal_ = ViewCenterFraction(horizontal_);
+    center_vertical_ = ViewCenterFraction(vertical_);
+  }
+  void RestoreViewCenter() {
+    SetViewCenterFraction(horizontal_, center_horizontal_);
+    SetViewCenterFraction(vertical_, center_vertical_);
+  }
+
  private:
+  static double ViewCenterFraction(QScrollBar* bar) {
+    const double content = bar->maximum() + bar->pageStep();
+    if (content <= 0) return 0.5;
+    return (bar->value() + bar->pageStep() / 2.0) / content;
+  }
+  static void SetViewCenterFraction(QScrollBar* bar, double fraction) {
+    const double content = bar->maximum() + bar->pageStep();
+    bar->setValue(static_cast<int>(fraction * content - bar->pageStep() / 2.0));
+  }
+
   QScrollBar* vertical_;
   QScrollBar* horizontal_;
   double last_vertical_;
   double last_horizontal_;
+  double center_horizontal_ = 0.5;
+  double center_vertical_ = 0.5;
   bool need_reset_;
   QSize image_size_;
 };

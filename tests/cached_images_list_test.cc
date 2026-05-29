@@ -163,3 +163,37 @@ TEST_F(CachedImagesListTest, CorruptImageShowsPlaceholder) {
   ASSERT_FALSE(displayed_.isNull());
   EXPECT_EQ(displayed_.size(), QSize(640, 360));
 }
+
+// Zoom scales relative to the fit-to-width view (1.0 == screen width) and
+// preserves the image content.
+TEST_F(CachedImagesListTest, ZoomScalesRelativeToFitWidth) {
+  Build(MakeImages(5), /*capacity=*/5, /*start=*/3);  // index 2
+  cache_->scale();                                    // enter the scaled view
+  cache_->DisplayImage();
+  EXPECT_EQ(displayed_.width(), screen_width_);
+  EXPECT_EQ(DisplayedIndex(), 2);
+
+  cache_->zoomBy(2.0);
+  cache_->DisplayImage();
+  EXPECT_EQ(displayed_.width(), 2 * screen_width_);
+  EXPECT_EQ(DisplayedIndex(), 2);
+
+  cache_->resetZoom();
+  cache_->DisplayImage();
+  EXPECT_EQ(displayed_.width(), screen_width_);
+}
+
+// The zoom factor is a session property: switching images keeps the same
+// on-screen scale, which is what lets a region line up across the flip.
+TEST_F(CachedImagesListTest, ZoomIsSharedAcrossImages) {
+  Build(MakeImages(5), /*capacity=*/5, /*start=*/1);  // index 0
+  cache_->zoomBy(2.0);
+
+  Go<NextImage>();  // first step just displays the current image
+  EXPECT_EQ(displayed_.width(), 2 * screen_width_);
+  EXPECT_EQ(DisplayedIndex(), 0);
+
+  Go<NextImage>();  // move to the next image
+  EXPECT_EQ(displayed_.width(), 2 * screen_width_);
+  EXPECT_EQ(DisplayedIndex(), 1);
+}

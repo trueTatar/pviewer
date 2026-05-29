@@ -1,5 +1,7 @@
 #include "images_selector_dialog.hpp"
 
+#include "image_formats.hpp"
+
 #include <QApplication>
 #include <QCollator>
 #include <QFileDialog>
@@ -52,9 +54,11 @@ void ImagesSelectorDialog::setImages(QList<QString> images) {
 
 void ImagesSelectorDialog::selectImages() {
   accept();
+  QString filter =
+      "Images (" + SupportedImageNameFilters().join(QLatin1Char(' ')) + ")";
   QList<QString> pixmap_list = QFileDialog::getOpenFileNames(
       dynamic_cast<QWidget*>(parent()), "Select one or more files to open",
-      g_basicPath, "Images (*.png *.jpg *.jpeg)");
+      g_basicPath, filter);
   emit stringListPrepared(pixmap_list, 1);
 }
 
@@ -74,9 +78,7 @@ void ImagesSelectorDialog::selectAllImagesInDirectory(GetDirectoryVia opt,
     return;
   }
 
-  directory.setNameFilters(QStringList() << "*.jpg"
-                                         << "*.jpeg"
-                                         << "*.png");
+  directory.setNameFilters(SupportedImageNameFilters());
   QList<QString> pixmap_list = directory.entryList(QDir::Files);
   sortItems(pixmap_list);
   convertPathsToAbsolute(directory, pixmap_list);

@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <iostream>
 
+#include "image_formats.hpp"
 #include "main_window.hpp"
 
 MainWindow* CreateWindow(int argc, char* argv[]) {
@@ -18,8 +19,7 @@ MainWindow* CreateWindow(int argc, char* argv[]) {
                   << " is not a file\nAborting..." << std::endl;
         exit(1);
       }
-      QString s = info.suffix();
-      if (s == "jpg" || s == "png" || s == "jpeg") {
+      if (IsSupportedImageSuffix(info.suffix())) {
         images.append(filename);
       }
     }

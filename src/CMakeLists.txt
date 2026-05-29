@@ -4,6 +4,7 @@ set(HEADER_LIST "${photo_viewer_SOURCE_DIR}/include/main_window.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/messagebox.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/images_selector_dialog.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/arrow_keys_scroller.hpp"
+                "${photo_viewer_SOURCE_DIR}/include/image_formats.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/global_path.hpp")
 
 set(SOURCES_LIST "${photo_viewer_SOURCE_DIR}/src/main_window.cc"

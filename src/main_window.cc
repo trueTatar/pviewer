@@ -80,12 +80,13 @@ void MainWindow::Construct() {
             }
           });
   connect(m_psd, &ImagesSelectorDialog::stringListPrepared,
-          [images, this](QList<QString> list, int pos) {
+          [images, cache, this](QList<QString> list, int pos) {
             if (!list.empty()) {
               QVector<QString> vector;
               std::move(list.begin(), list.end(), std::back_inserter(vector));
               images->setNewList(std::move(vector));
               move->moveTo<ImageNumber>(pos);
+              cache->DisplayImage();
             }
           });
 

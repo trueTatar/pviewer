@@ -142,17 +142,7 @@ class MainWindow::WheelScrollingState {
  public:
   WheelScrollingState() : horizontal_(false) {}
   void ToggleOrientation() { horizontal_ = !horizontal_; }
-  QWheelEvent* GetWheelEvent(QWheelEvent* event) {
-    if (horizontal_) {
-      event->ignore();
-      event = new QWheelEvent(
-          event->position(), event->globalPosition(), event->pixelDelta(),
-          QPoint(event->angleDelta().y(), event->angleDelta().x()),
-          event->buttons(), event->modifiers(), event->phase(),
-          event->inverted());
-    }
-    return event;
-  }
+  bool isHorizontal() const { return horizontal_; }
 
  private:
   bool horizontal_;

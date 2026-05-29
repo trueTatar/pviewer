@@ -212,7 +212,18 @@ void MainWindow::mousePressEvent(QMouseEvent* pe) {
 }
 
 void MainWindow::wheelEvent(QWheelEvent* pe) {
-  QScrollArea::wheelEvent(wheel_scrolling->GetWheelEvent(pe));
+  if (!wheel_scrolling->isHorizontal()) {
+    QScrollArea::wheelEvent(pe);
+    return;
+  }
+  // Forward a stack-allocated event with the scroll axes swapped; no heap
+  // allocation means no per-tick leak.
+  QWheelEvent swapped(pe->position(), pe->globalPosition(), pe->pixelDelta(),
+                      QPoint(pe->angleDelta().y(), pe->angleDelta().x()),
+                      pe->buttons(), pe->modifiers(), pe->phase(),
+                      pe->inverted());
+  QScrollArea::wheelEvent(&swapped);
+  pe->setAccepted(swapped.isAccepted());
 }
 
 void MainWindow::moveEvent(QMoveEvent*) {

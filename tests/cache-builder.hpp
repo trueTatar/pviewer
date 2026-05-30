@@ -115,7 +115,6 @@ class FakeCachedImageList
     is_image_null_ = false;
   }
   void HideImage() final { is_image_null_ = true; }
-  void UpdateCurrentScaledImage() final {}
 
   void PopFront() override { cache_.pop_front(); }
   void PopBack() override { cache_.pop_back(); }

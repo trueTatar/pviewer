@@ -18,12 +18,15 @@
  * Unlike cacher_test.cc / viewer_test.cc (which drive the abstract algorithm on
  * integer stand-ins), this suite exercises the *production* CachedImagesList on
  * real image files: the QtConcurrent decode, the lazy QFuture->QPixmap resolve,
- * scaling, the corrupt-file placeholder, and the alignment of the three
- * parallel lists (source_/scaled_/pending_).
+ * the corrupt-file placeholder, and the alignment of the two parallel lists
+ * (source_/pending_).
  *
  * Each generated image is a solid colour whose red channel equals its index, so
  * the colour of whatever ends up displayed tells us exactly which slot was
  * resolved -- a wrong colour would expose a list misalignment.
+ *
+ * Zoom and scaling are view-layer concerns (MainWindow / QGraphicsView) and are
+ * not tested here.
  */
 class CachedImagesListTest : public ::testing::Test {
  protected:
@@ -63,9 +66,8 @@ class CachedImagesListTest : public ::testing::Test {
     images_ = std::make_shared<ImagePath>();
     images_->CreateTaskQueue<TaskQueue>(capacity);
     cache_ = images_->CreateCacheObject<CachedImagesList>(
-        capacity, [this](QPixmap const& p) { displayed_ = p; },
-        [this] { return screen_width_; });
-    cache_->SetImageSizePasser([] {}, [](QSize) {});
+        capacity, [this](QPixmap const& p) { displayed_ = p; });
+    cache_->SetScrollCallbacks([] {}, [] {});
     folders_ = std::make_shared<FolderPath>();
     move_ = std::make_unique<ImagesNavigator<QString, QPixmap>>(
         images_, cache_, folders_, [this] { return displayed_.isNull(); });
@@ -88,7 +90,6 @@ class CachedImagesListTest : public ::testing::Test {
   }
 
   QTemporaryDir tmp_;
-  int screen_width_ = 1000;
   QPixmap displayed_;
   std::shared_ptr<ImagePath> images_;
   std::shared_ptr<CachedImagesList> cache_;
@@ -106,8 +107,8 @@ TEST_F(CachedImagesListTest, DecodesAndDisplaysRealPixmap) {
   EXPECT_EQ(DisplayedIndex(), 0);
 }
 
-// Sliding the window forward (push_back + pop_front on all three lists) must
-// keep source_/pending_ aligned: the resolved colour proves the right slot.
+// Sliding the window forward (push_back + pop_front on both lists) must keep
+// source_/pending_ aligned: the resolved colour proves the right slot.
 TEST_F(CachedImagesListTest, ForwardNavigationResolvesCorrectImages) {
   Build(MakeImages(10), /*capacity=*/5, /*start=*/1);  // index 0
 
@@ -133,25 +134,6 @@ TEST_F(CachedImagesListTest, BackwardNavigationResolvesCorrectImages) {
   }
 }
 
-// Toggling scale() swaps between source width and screen width, on the same
-// image (colour is preserved through the scaling path).
-TEST_F(CachedImagesListTest, ScalingTogglesWidthAndKeepsImage) {
-  Build(MakeImages(5), /*capacity=*/5, /*start=*/3);  // index 2
-  cache_->DisplayImage();
-  EXPECT_EQ(displayed_.width(), kW);
-  EXPECT_EQ(DisplayedIndex(), 2);
-
-  cache_->scale();
-  cache_->DisplayImage();
-  EXPECT_EQ(displayed_.width(), screen_width_);
-  EXPECT_EQ(DisplayedIndex(), 2);
-
-  cache_->scale();
-  cache_->DisplayImage();
-  EXPECT_EQ(displayed_.width(), kW);
-  EXPECT_EQ(DisplayedIndex(), 2);
-}
-
 // A file that fails to decode must show the visible placeholder, not a blank
 // (null) pixmap.
 TEST_F(CachedImagesListTest, CorruptImageShowsPlaceholder) {
@@ -162,38 +144,4 @@ TEST_F(CachedImagesListTest, CorruptImageShowsPlaceholder) {
 
   ASSERT_FALSE(displayed_.isNull());
   EXPECT_EQ(displayed_.size(), QSize(640, 360));
-}
-
-// Zoom scales relative to the fit-to-width view (1.0 == screen width) and
-// preserves the image content.
-TEST_F(CachedImagesListTest, ZoomScalesRelativeToFitWidth) {
-  Build(MakeImages(5), /*capacity=*/5, /*start=*/3);  // index 2
-  cache_->scale();                                    // enter the scaled view
-  cache_->DisplayImage();
-  EXPECT_EQ(displayed_.width(), screen_width_);
-  EXPECT_EQ(DisplayedIndex(), 2);
-
-  cache_->zoomBy(2.0);
-  cache_->DisplayImage();
-  EXPECT_EQ(displayed_.width(), 2 * screen_width_);
-  EXPECT_EQ(DisplayedIndex(), 2);
-
-  cache_->resetZoom();
-  cache_->DisplayImage();
-  EXPECT_EQ(displayed_.width(), screen_width_);
-}
-
-// The zoom factor is a session property: switching images keeps the same
-// on-screen scale, which is what lets a region line up across the flip.
-TEST_F(CachedImagesListTest, ZoomIsSharedAcrossImages) {
-  Build(MakeImages(5), /*capacity=*/5, /*start=*/1);  // index 0
-  cache_->zoomBy(2.0);
-
-  Go<NextImage>();  // first step just displays the current image
-  EXPECT_EQ(displayed_.width(), 2 * screen_width_);
-  EXPECT_EQ(DisplayedIndex(), 0);
-
-  Go<NextImage>();  // move to the next image
-  EXPECT_EQ(displayed_.width(), 2 * screen_width_);
-  EXPECT_EQ(DisplayedIndex(), 1);
 }

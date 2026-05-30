@@ -66,7 +66,7 @@ class ImageCache : public QObject {
 
   virtual void DisplayImage() = 0;
   virtual void HideImage() = 0;
-  virtual void UpdateCurrentScaledImage() = 0;
+  virtual void UpdateCurrentScaledImage() {}
   virtual bool isEmpty() const = 0;
 
   virtual void Clear() = 0;

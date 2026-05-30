@@ -1,13 +1,15 @@
 #pragma once
 
-#include <QScrollArea>
+#include <QGraphicsPixmapItem>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 
 #include "arrow_keys_scroller.hpp"
 #include "images_navigator.hpp"
 
 class ImagesSelectorDialog;
 
-class MainWindow : public QScrollArea {
+class MainWindow : public QGraphicsView {
   Q_OBJECT
  private:
   using BeginOfTheList = BeginOfTheListImpl<QString, QPixmap>;
@@ -19,7 +21,6 @@ class MainWindow : public QScrollArea {
 
   class SlidersState;
   class WheelScrollingState;
-  class Viewer;
   class AutoScrolling;
 
  public:
@@ -28,6 +29,7 @@ class MainWindow : public QScrollArea {
 
  protected:
   void moveEvent(QMoveEvent*) override;
+  void resizeEvent(QResizeEvent*) override;
   void keyPressEvent(QKeyEvent*) override;
   void keyReleaseEvent(QKeyEvent*) override;
   void mousePressEvent(QMouseEvent*) override;
@@ -37,21 +39,36 @@ class MainWindow : public QScrollArea {
  private:
   void Construct();
   bool imageDisplayed();
+  void clearImage();
   void formatWidget();
+  // Recomputes fit_zoom_ from the current pixmap and viewport, then applies
+  // fit_zoom_ * zoom_factor_ as the view transform. Single source of truth for
+  // all zoom state changes.
+  void applyZoom();
+  void fitToWidth();
+  void zoomBy(double factor);
+  void toggleFitNative();
+
+  // zoom_factor_ is [kMinZoom, kMaxZoom] relative to fit-to-width.
+  // fit_zoom_ is recomputed per image; it is NOT a session property.
+  static constexpr double kMinZoom = 0.01;
+  static constexpr double kMaxZoom = 32.0;
+
   std::unique_ptr<move_t> move;
   std::unique_ptr<SlidersState> sliders_state;
   std::unique_ptr<WheelScrollingState> wheel_scrolling;
   std::unique_ptr<AutoScrolling> auto_scrolling;
   ArrowKeysScroller* arrows_scroller_;
-  Viewer* viewer_;
   ImagesSelectorDialog* m_psd;
   QScreen* currentScreen;
+  QGraphicsScene* scene_;
+  QGraphicsPixmapItem* item_;
+  double fit_zoom_ = 1.0;    // viewport_width / image_width for current image
+  double zoom_factor_ = 1.0; // user multiplier relative to fit; shared across images
+  bool is_fitted_ = true;
 
  signals:
   void repaintImage();
-  void scaleImage();
-  void zoomImage(double factor);
-  void resetZoomImage();
   void chooseFilesToOpen();
   void displayImageNumber();
 };
@@ -105,64 +122,39 @@ class MainWindow::AutoScrolling : public QObject {
   QTimer* timer_;
 };
 
+// Saves and restores the scene point at the centre of the viewport as a
+// fraction of the scene rect. This handles images of different sizes: a
+// fractional position of (0.5, 0.5) always means "centre of the image",
+// regardless of whether the next image is larger or smaller.
 class MainWindow::SlidersState {
  public:
-  SlidersState(QScrollBar* vertical, QScrollBar* horizontal)
-      : vertical_(vertical),
-        horizontal_(horizontal),
-        last_vertical_(0),
-        last_horizontal_(0),
-        need_reset_(false) {}
+  explicit SlidersState(MainWindow* view)
+      : view_(view), saved_fx_(0.5), saved_fy_(0.5), need_reset_(false) {}
   void ToggleResetting() { need_reset_ = !need_reset_; }
   void SaveScrollPosition() {
-    if (vertical_->value() || horizontal_->value()) {
-      last_vertical_ = vertical_->value() / double(image_size_.height());
-      last_horizontal_ = horizontal_->value() / double(image_size_.width());
+    QPointF c = view_->mapToScene(view_->viewport()->rect().center());
+    QRectF sr = view_->sceneRect();
+    if (sr.width() > 0 && sr.height() > 0) {
+      saved_fx_ = (c.x() - sr.left()) / sr.width();
+      saved_fy_ = (c.y() - sr.top()) / sr.height();
     }
   }
-  void RestoreScrollPosition(QSize image) {
-    int v = 0, h = 0;
-    if (!need_reset_) {
-      v = last_vertical_ * image.height();
-      h = last_horizontal_ * image.width();
+  void RestoreScrollPosition() {
+    if (need_reset_) {
+      view_->horizontalScrollBar()->setValue(0);
+      view_->verticalScrollBar()->setValue(0);
+    } else {
+      QRectF sr = view_->sceneRect();
+      view_->centerOn(sr.left() + saved_fx_ * sr.width(),
+                      sr.top() + saved_fy_ * sr.height());
     }
-    vertical_->setValue(v);
-    horizontal_->setValue(h);
-    image_size_ = image;
-  }
-
-  // Capture/restore the content point at the center of the viewport, as a
-  // fraction of the scrollable content. Used to anchor zoom on the center
-  // instead of the top-left corner: capture before re-rasterizing, restore
-  // once the new (larger/smaller) pixmap is laid out.
-  void SaveViewCenter() {
-    center_horizontal_ = ViewCenterFraction(horizontal_);
-    center_vertical_ = ViewCenterFraction(vertical_);
-  }
-  void RestoreViewCenter() {
-    SetViewCenterFraction(horizontal_, center_horizontal_);
-    SetViewCenterFraction(vertical_, center_vertical_);
   }
 
  private:
-  static double ViewCenterFraction(QScrollBar* bar) {
-    const double content = bar->maximum() + bar->pageStep();
-    if (content <= 0) return 0.5;
-    return (bar->value() + bar->pageStep() / 2.0) / content;
-  }
-  static void SetViewCenterFraction(QScrollBar* bar, double fraction) {
-    const double content = bar->maximum() + bar->pageStep();
-    bar->setValue(static_cast<int>(fraction * content - bar->pageStep() / 2.0));
-  }
-
-  QScrollBar* vertical_;
-  QScrollBar* horizontal_;
-  double last_vertical_;
-  double last_horizontal_;
-  double center_horizontal_ = 0.5;
-  double center_vertical_ = 0.5;
+  MainWindow* view_;
+  double saved_fx_;
+  double saved_fy_;
   bool need_reset_;
-  QSize image_size_;
 };
 
 class MainWindow::WheelScrollingState {
@@ -173,17 +165,4 @@ class MainWindow::WheelScrollingState {
 
  private:
   bool horizontal_;
-};
-
-class MainWindow::Viewer : public QLabel {
- public:
-  Viewer(QWidget* parent) : QLabel(parent) {
-    setAlignment(Qt::AlignCenter);
-    QPalette palette;
-    int color = 32;
-    QColor gray(color, color, color);
-    palette.setColor(QPalette::Window, gray);
-    setAutoFillBackground(true);
-    setPalette(palette);
-  }
 };

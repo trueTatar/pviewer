@@ -1,46 +1,94 @@
 #include "main_window.hpp"
 
+#include <QApplication>
+#include <algorithm>
+
 #include "cached_images_list.hpp"
 #include "images_selector_dialog.hpp"
 
 void MainWindow::formatWidget() {
   setMinimumSize(640, 360);
-  setFrameShape(NoFrame);
+  setFrameStyle(QFrame::NoFrame);
   setAlignment(Qt::AlignCenter);
   setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  setWidgetResizable(true);
+  setInteractive(false);
+  setTransformationAnchor(AnchorViewCenter);
+  setResizeAnchor(AnchorViewCenter);
+}
+
+void MainWindow::applyZoom() {
+  if (item_->pixmap().isNull()) return;
+  fit_zoom_ = viewport()->width() / qreal(item_->pixmap().width());
+  const double s = fit_zoom_ * zoom_factor_;
+  setTransform(QTransform::fromScale(s, s));
+}
+
+void MainWindow::fitToWidth() {
+  zoom_factor_ = 1.0;
+  is_fitted_ = true;
+  applyZoom();
+}
+
+void MainWindow::zoomBy(double factor) {
+  if (!imageDisplayed()) return;
+  zoom_factor_ = std::clamp(zoom_factor_ * factor, kMinZoom, kMaxZoom);
+  is_fitted_ = false;
+  applyZoom();
+}
+
+void MainWindow::toggleFitNative() {
+  if (!imageDisplayed()) return;
+  if (!is_fitted_) {
+    fitToWidth();
+  } else {
+    // Native: 1 source pixel = 1 screen pixel for the current image.
+    // zoom_factor_ = 1/fit_zoom_ makes fit_zoom_ * zoom_factor_ = 1.0.
+    zoom_factor_ = 1.0 / fit_zoom_;
+    is_fitted_ = false;
+    applyZoom();
+  }
+}
+
+void MainWindow::clearImage() {
+  item_->setPixmap(QPixmap());
+  setSceneRect(QRectF());
 }
 
 void MainWindow::Construct() {
   currentScreen = screen();
-  setFocusPolicy(Qt::StrongFocus);  //  accept key command
+  setFocusPolicy(Qt::StrongFocus);
+
+  scene_ = new QGraphicsScene(this);
+  item_ = new QGraphicsPixmapItem();
+  item_->setTransformationMode(Qt::SmoothTransformation);
+  scene_->addItem(item_);
+  setScene(scene_);
+
+  // Dark background matching the original Viewer palette.
+  setBackgroundBrush(QColor(32, 32, 32));
 
   wheel_scrolling = std::make_unique<WheelScrollingState>();
-  sliders_state = std::make_unique<SlidersState>(verticalScrollBar(),
-                                                 horizontalScrollBar());
-  viewer_ = new Viewer(this);
+  sliders_state = std::make_unique<SlidersState>(this);
 
-  auto screen_width = [this] { return viewer_->screen()->size().width(); };
   auto update_image = [this](QPixmap const& image) {
-    viewer_->setPixmap(image);
+    item_->setPixmap(image);
+    setSceneRect(item_->boundingRect());
+    if (!image.isNull()) applyZoom();
   };
   auto images = std::make_shared<ImagePath>();
   int initial_task_queue, cache_capacity;
   initial_task_queue = cache_capacity = 10;
   images->CreateTaskQueue<TaskQueue>(initial_task_queue);
-  auto cache = images->CreateCacheObject<CachedImagesList>(
-      cache_capacity, update_image, screen_width);
+  auto cache =
+      images->CreateCacheObject<CachedImagesList>(cache_capacity, update_image);
 
-  cache->SetImageSizePasser(
+  cache->SetScrollCallbacks(
       std::bind(&SlidersState::SaveScrollPosition, sliders_state.get()),
-      std::bind(&SlidersState::RestoreScrollPosition, sliders_state.get(),
-                std::placeholders::_1));
+      std::bind(&SlidersState::RestoreScrollPosition, sliders_state.get()));
 
   auto folders = std::make_shared<FolderPath>();
-  auto is_null_image = [this] {
-    return viewer_->pixmap(Qt::ReturnByValue).isNull();
-  };
+  auto is_null_image = [this] { return item_->pixmap().isNull(); };
   move = std::make_unique<move_t>(images, cache, folders, is_null_image);
 
   arrows_scroller_ =
@@ -48,42 +96,20 @@ void MainWindow::Construct() {
   m_psd = new ImagesSelectorDialog(this);
   formatWidget();
 
-  connect(folders.get(), &FolderPath::folderIsChanged, [&] {
+  connect(folders.get(), &FolderPath::folderIsChanged, [this] {
     move->moveTo<BeginOfTheList>();
-    viewer_->clear();
+    clearImage();
   });
   connect(this, &MainWindow::chooseFilesToOpen, [this] {
-    viewer_->clear();
+    clearImage();
     m_psd->exec();
   });
   connect(this, &MainWindow::displayImageNumber,
           [images] { MessageBox::inform(images.get()->imageNumber(), 1000); });
-  connect(this, &MainWindow::scaleImage, [this, cache] {
-    if (!cache->isEmpty() && imageDisplayed()) {
-      cache.get()->scale();
-      cache.get()->DisplayImage();
-    }
-  });
-  connect(this, &MainWindow::zoomImage, [this, cache](double factor) {
-    if (!cache->isEmpty() && imageDisplayed()) {
-      sliders_state->SaveViewCenter();
-      cache.get()->zoomBy(factor);
-      cache.get()->DisplayImage();
-      sliders_state->RestoreViewCenter();
-    }
-  });
-  connect(this, &MainWindow::resetZoomImage, [this, cache] {
-    if (!cache->isEmpty() && imageDisplayed()) {
-      sliders_state->SaveViewCenter();
-      cache.get()->resetZoom();
-      cache.get()->DisplayImage();
-      sliders_state->RestoreViewCenter();
-    }
-  });
   connect(this, &MainWindow::repaintImage, [this, cache] {
     if (imageDisplayed()) {
-      cache.get()->UpdateCurrentScaledImage();
       cache.get()->DisplayImage();
+      applyZoom();
     }
   });
 
@@ -107,17 +133,16 @@ void MainWindow::Construct() {
           });
 
   m_psd->AssociateWith(folders);
-  setWidget(viewer_);
 }
 
 MainWindow::MainWindow(QString path, int pos, QWidget* parent)
-    : QScrollArea(parent) {
+    : QGraphicsView(parent) {
   Construct();
   m_psd->setDirectory(path, pos);
 }
 
 MainWindow::MainWindow(QList<QString> images, QWidget* parent)
-    : QScrollArea(parent) {
+    : QGraphicsView(parent) {
   Construct();
   m_psd->setImages(images);
 }
@@ -151,20 +176,20 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
       break;
     }
     case Qt::Key_S: {
-      emit scaleImage();
+      toggleFitNative();
       break;
     }
     case Qt::Key_Plus:
     case Qt::Key_Equal: {
-      emit zoomImage(1.25);
+      zoomBy(1.25);
       break;
     }
     case Qt::Key_Minus: {
-      emit zoomImage(0.8);
+      zoomBy(0.8);
       break;
     }
     case Qt::Key_0: {
-      emit resetZoomImage();
+      fitToWidth();
       break;
     }
     case Qt::Key_Right: {
@@ -193,12 +218,12 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
     }
     case Qt::Key_Home: {
       move->moveTo<BeginOfTheList>();
-      viewer_->clear();
+      clearImage();
       break;
     }
     case Qt::Key_End: {
       move->moveTo<EndOfTheList>();
-      viewer_->clear();
+      clearImage();
       break;
     }
     case Qt::Key_Escape: {
@@ -243,26 +268,28 @@ void MainWindow::mousePressEvent(QMouseEvent* pe) {
 
 void MainWindow::wheelEvent(QWheelEvent* pe) {
   if (!wheel_scrolling->isHorizontal()) {
-    QScrollArea::wheelEvent(pe);
+    QGraphicsView::wheelEvent(pe);
     return;
   }
-  // Forward a stack-allocated event with the scroll axes swapped; no heap
-  // allocation means no per-tick leak.
   QWheelEvent swapped(pe->position(), pe->globalPosition(), pe->pixelDelta(),
                       QPoint(pe->angleDelta().y(), pe->angleDelta().x()),
                       pe->buttons(), pe->modifiers(), pe->phase(),
                       pe->inverted());
-  QScrollArea::wheelEvent(&swapped);
+  QGraphicsView::wheelEvent(&swapped);
   pe->setAccepted(swapped.isAccepted());
 }
 
 void MainWindow::moveEvent(QMoveEvent*) {
-  QCoreApplication::processEvents();  // this line need for screen updating;
-  // otherwise QWidget::screen returns "old" screen
+  QCoreApplication::processEvents();
   if (currentScreen->geometry() != screen()->geometry()) {
     currentScreen = screen();
     emit repaintImage();
   }
+}
+
+void MainWindow::resizeEvent(QResizeEvent* e) {
+  QGraphicsView::resizeEvent(e);
+  if (imageDisplayed()) applyZoom();
 }
 
 void MainWindow::mouseDoubleClickEvent(QMouseEvent* pe) {
@@ -273,5 +300,5 @@ void MainWindow::mouseDoubleClickEvent(QMouseEvent* pe) {
 }
 
 bool MainWindow::imageDisplayed() {
-  return !viewer_->pixmap(Qt::ReturnByValue).isNull();
+  return !item_->pixmap().isNull();
 }

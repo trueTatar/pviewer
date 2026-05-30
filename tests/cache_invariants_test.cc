@@ -121,8 +121,9 @@ TEST(CacheInvariants, RandomWalkHoldsContract) {
 
       // I6: a single Next/Prev moves the cursor by at most one.
       const int cur = s.images->Pos();
-      if (action == "Next" || action == "Prev")
+      if (action == "Next" || action == "Prev") {
         EXPECT_LE(std::abs(cur - prev), 1) << ctx;
+      }
       prev = cur;
     }
   }

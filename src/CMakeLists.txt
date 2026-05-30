@@ -3,12 +3,15 @@ set(HEADER_LIST "${photo_viewer_SOURCE_DIR}/include/main_window.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/images_navigator.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/messagebox.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/images_selector_dialog.hpp"
+                "${photo_viewer_SOURCE_DIR}/include/images_list_panel.hpp"
+                "${photo_viewer_SOURCE_DIR}/include/image_comparison_model.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/arrow_keys_scroller.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/image_formats.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/global_path.hpp")
 
 set(SOURCES_LIST "${photo_viewer_SOURCE_DIR}/src/main_window.cc"
                  "${photo_viewer_SOURCE_DIR}/src/arrow_keys_scroller.cc"
+                 "${photo_viewer_SOURCE_DIR}/src/images_list_panel.cpp"
                  "${photo_viewer_SOURCE_DIR}/src/images_selector_dialog.cpp")
 
 find_package(Qt5 COMPONENTS Widgets Network Concurrent)

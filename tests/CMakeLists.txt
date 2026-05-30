@@ -1,5 +1,6 @@
 add_executable(testing viewer_test.cc cacher_test.cc cached_images_list_test.cc
                        cache_invariants_test.cc main_window_viewport_test.cc
+                       image_comparison_model_test.cc
                        main.cc)
 find_package(GTest REQUIRED)
 find_package(Qt5 COMPONENTS Widgets Concurrent REQUIRED)

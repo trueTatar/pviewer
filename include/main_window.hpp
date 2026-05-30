@@ -5,9 +5,12 @@
 #include <QGraphicsView>
 
 #include "arrow_keys_scroller.hpp"
+#include "image_comparison_model.hpp"
 #include "images_navigator.hpp"
 
+class CachedImagesList;
 class ImagesSelectorDialog;
+class ImagesListPanel;
 
 class MainWindow : public QGraphicsView {
   Q_OBJECT
@@ -48,6 +51,14 @@ class MainWindow : public QGraphicsView {
   void fitToWidth();
   void zoomBy(double factor);
   void toggleFitNative();
+  void toggleImagesListPanel();
+  void setComparisonImages(QList<QString> list, int position);
+  void rebuildActiveImages(QString const& preferred_path, int fallback_position);
+  void applyPanelEntries(QVector<ImageEntry> entries);
+  void activatePanelImage(QString path);
+  void updatePanelCurrentImage();
+  QString currentImagePath() const;
+  bool hasActiveImages() const;
 
   // zoom_factor_ is [kMinZoom, kMaxZoom] relative to fit-to-width.
   // fit_zoom_ is recomputed per image; it is NOT a session property.
@@ -58,8 +69,13 @@ class MainWindow : public QGraphicsView {
   std::unique_ptr<SlidersState> sliders_state;
   std::unique_ptr<WheelScrollingState> wheel_scrolling;
   std::unique_ptr<AutoScrolling> auto_scrolling;
+  std::shared_ptr<ImagePath> images_;
+  std::shared_ptr<CachedImagesList> cache_;
+  std::shared_ptr<FolderPath> folders_;
+  ImageComparisonModel comparison_model_;
   ArrowKeysScroller* arrows_scroller_;
   ImagesSelectorDialog* m_psd;
+  ImagesListPanel* images_panel_;
   QScreen* currentScreen;
   QGraphicsScene* scene_;
   QGraphicsPixmapItem* item_;
@@ -99,7 +115,10 @@ class MainWindow::AutoScrolling : public QObject {
       ToggleState(delay_before_scrolling_);
     } else {
       if (isScrolledToBottom()) {
-        main_window_.move->moveTo<NextImage>();
+        if (main_window_.hasActiveImages()) {
+          main_window_.move->moveTo<NextImage>();
+          main_window_.updatePanelCurrentImage();
+        }
         return;
       }
       ToggleState(scroll_tick_);

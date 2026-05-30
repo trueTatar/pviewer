@@ -5,6 +5,7 @@
 
 #include "cached_images_list.hpp"
 #include "images_selector_dialog.hpp"
+#include "images_list_panel.hpp"
 
 void MainWindow::formatWidget() {
   setMinimumSize(640, 360);
@@ -50,6 +51,64 @@ void MainWindow::toggleFitNative() {
   }
 }
 
+void MainWindow::toggleImagesListPanel() {
+  images_panel_->isVisible() ? images_panel_->hide() : images_panel_->show();
+}
+
+QString MainWindow::currentImagePath() const {
+  if (!hasActiveImages()) return QString();
+  return images_->pathByIndex();
+}
+
+bool MainWindow::hasActiveImages() const {
+  return images_ && !images_->isEmpty();
+}
+
+void MainWindow::setComparisonImages(QList<QString> list, int position) {
+  QVector<QString> vector;
+  vector.reserve(list.size());
+  std::move(list.begin(), list.end(), std::back_inserter(vector));
+
+  comparison_model_.SetImages(std::move(vector));
+  images_panel_->SetEntries(comparison_model_.Entries());
+  rebuildActiveImages(QString(), position);
+}
+
+void MainWindow::applyPanelEntries(QVector<ImageEntry> entries) {
+  const QString preferred_path = currentImagePath();
+  comparison_model_.SetEntries(std::move(entries));
+  rebuildActiveImages(preferred_path, 1);
+}
+
+void MainWindow::activatePanelImage(QString path) {
+  rebuildActiveImages(path, 1);
+}
+
+void MainWindow::updatePanelCurrentImage() {
+  images_panel_->SetCurrentPath(currentImagePath());
+}
+
+void MainWindow::rebuildActiveImages(QString const& preferred_path,
+                                     int fallback_position) {
+  QVector<QString> active_paths = comparison_model_.EnabledPaths();
+  if (active_paths.empty()) {
+    images_->setNewList(std::move(active_paths));
+    clearImage();
+    updatePanelCurrentImage();
+    return;
+  }
+
+  int position = comparison_model_.EnabledPositionFor(preferred_path);
+  if (position == 0) {
+    position = std::clamp(fallback_position, 1, active_paths.size());
+  }
+
+  images_->setNewList(std::move(active_paths));
+  move->moveTo<ImageNumber>(position);
+  cache_->DisplayImage();
+  updatePanelCurrentImage();
+}
+
 void MainWindow::clearImage() {
   item_->setPixmap(QPixmap());
   setSceneRect(QRectF());
@@ -76,29 +135,34 @@ void MainWindow::Construct() {
     setSceneRect(item_->boundingRect());
     if (!image.isNull()) applyZoom();
   };
-  auto images = std::make_shared<ImagePath>();
   int initial_task_queue, cache_capacity;
   initial_task_queue = cache_capacity = 10;
-  images->CreateTaskQueue<TaskQueue>(initial_task_queue);
-  auto cache =
-      images->CreateCacheObject<CachedImagesList>(cache_capacity, update_image);
+  images_ = std::make_shared<ImagePath>();
+  images_->CreateTaskQueue<TaskQueue>(initial_task_queue);
+  cache_ =
+      images_->CreateCacheObject<CachedImagesList>(cache_capacity, update_image);
 
-  cache->SetScrollCallbacks(
+  cache_->SetScrollCallbacks(
       std::bind(&SlidersState::SaveScrollPosition, sliders_state.get()),
       std::bind(&SlidersState::RestoreScrollPosition, sliders_state.get()),
       [this] { return imageDisplayed(); });
 
-  auto folders = std::make_shared<FolderPath>();
+  folders_ = std::make_shared<FolderPath>();
   auto is_null_image = [this] { return item_->pixmap().isNull(); };
-  move = std::make_unique<move_t>(images, cache, folders, is_null_image);
+  move = std::make_unique<move_t>(images_, cache_, folders_, is_null_image);
 
   arrows_scroller_ =
       new ArrowKeysScroller(horizontalScrollBar(), verticalScrollBar());
   m_psd = new ImagesSelectorDialog(this);
+  images_panel_ = new ImagesListPanel(this);
   formatWidget();
 
-  connect(folders.get(), &FolderPath::folderIsChanged, [this] {
-    move->moveTo<BeginOfTheList>();
+  connect(images_panel_, &ImagesListPanel::entriesChanged, this,
+          &MainWindow::applyPanelEntries);
+  connect(images_panel_, &ImagesListPanel::imageActivated, this,
+          &MainWindow::activatePanelImage);
+  connect(folders_.get(), &FolderPath::folderIsChanged, [this] {
+    if (hasActiveImages()) move->moveTo<BeginOfTheList>();
     clearImage();
   });
   connect(this, &MainWindow::chooseFilesToOpen, [this] {
@@ -106,34 +170,35 @@ void MainWindow::Construct() {
     m_psd->exec();
   });
   connect(this, &MainWindow::displayImageNumber,
-          [images] { MessageBox::inform(images.get()->imageNumber(), 1000); });
-  connect(this, &MainWindow::repaintImage, [this, cache] {
+          [this] {
+            MessageBox::inform(
+                hasActiveImages() ? images_->imageNumber() : QString("0 / 0"),
+                1000);
+          });
+  connect(this, &MainWindow::repaintImage, [this] {
     if (imageDisplayed()) {
-      cache.get()->DisplayImage();
+      cache_.get()->DisplayImage();
       applyZoom();
+      updatePanelCurrentImage();
     }
   });
 
   connect(m_psd, &ImagesSelectorDialog::updateFolderList,
-          [folders](QList<QString> list) {
+          [this](QList<QString> list) {
             if (!list.empty()) {
               QVector<QString> vector;
               std::move(list.begin(), list.end(), std::back_inserter(vector));
-              folders->setNewList(std::move(vector));
+              folders_->setNewList(std::move(vector));
             }
           });
   connect(m_psd, &ImagesSelectorDialog::stringListPrepared,
-          [images, cache, this](QList<QString> list, int pos) {
+          [this](QList<QString> list, int pos) {
             if (!list.empty()) {
-              QVector<QString> vector;
-              std::move(list.begin(), list.end(), std::back_inserter(vector));
-              images->setNewList(std::move(vector));
-              move->moveTo<ImageNumber>(pos);
-              cache->DisplayImage();
+              setComparisonImages(std::move(list), pos);
             }
           });
 
-  m_psd->AssociateWith(folders);
+  m_psd->AssociateWith(folders_);
 }
 
 MainWindow::MainWindow(QString path, int pos, QWidget* parent)
@@ -193,15 +258,23 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
       fitToWidth();
       break;
     }
+    case Qt::Key_L: {
+      if (pe->modifiers() == Qt::NoModifier) {
+        toggleImagesListPanel();
+      }
+      break;
+    }
     case Qt::Key_Right: {
-      if (pe->modifiers() & Qt::ControlModifier) {
+      if ((pe->modifiers() & Qt::ControlModifier) && hasActiveImages()) {
         move->moveTo<NextImage>();
+        updatePanelCurrentImage();
       }
       break;
     }
     case Qt::Key_Left: {
-      if (pe->modifiers() & Qt::ControlModifier) {
+      if ((pe->modifiers() & Qt::ControlModifier) && hasActiveImages()) {
         move->moveTo<PreviousImage>();
+        updatePanelCurrentImage();
       }
       break;
     }
@@ -218,13 +291,17 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
       break;
     }
     case Qt::Key_Home: {
-      move->moveTo<BeginOfTheList>();
-      clearImage();
+      if (hasActiveImages()) {
+        move->moveTo<BeginOfTheList>();
+        clearImage();
+      }
       break;
     }
     case Qt::Key_End: {
-      move->moveTo<EndOfTheList>();
-      clearImage();
+      if (hasActiveImages()) {
+        move->moveTo<EndOfTheList>();
+        clearImage();
+      }
       break;
     }
     case Qt::Key_Escape: {
@@ -259,10 +336,16 @@ void MainWindow::mousePressEvent(QMouseEvent* pe) {
     wheel_scrolling->ToggleOrientation();
   }
   if (pe->button() & Qt::LeftButton) {
-    move->moveTo<PreviousImage>();
+    if (hasActiveImages()) {
+      move->moveTo<PreviousImage>();
+      updatePanelCurrentImage();
+    }
   }
   if (pe->button() & Qt::RightButton) {
-    move->moveTo<NextImage>();
+    if (hasActiveImages()) {
+      move->moveTo<NextImage>();
+      updatePanelCurrentImage();
+    }
   }
   QWidget::mousePressEvent(pe);
 }

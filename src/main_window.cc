@@ -85,7 +85,8 @@ void MainWindow::Construct() {
 
   cache->SetScrollCallbacks(
       std::bind(&SlidersState::SaveScrollPosition, sliders_state.get()),
-      std::bind(&SlidersState::RestoreScrollPosition, sliders_state.get()));
+      std::bind(&SlidersState::RestoreScrollPosition, sliders_state.get()),
+      [this] { return imageDisplayed(); });
 
   auto folders = std::make_shared<FolderPath>();
   auto is_null_image = [this] { return item_->pixmap().isNull(); };

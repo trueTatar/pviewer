@@ -47,9 +47,11 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
                         : pending_.push_back(future);
   }
   void SetScrollCallbacks(std::function<void()> save,
-                          std::function<void()> restore) {
+                          std::function<void()> restore,
+                          std::function<bool()> can_save = {}) {
     save_scroll_position_ = save;
     restore_scroll_position_ = restore;
+    can_save_scroll_position_ = can_save;
   }
 
  private:
@@ -64,6 +66,7 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
   std::function<void(QPixmap const&)> UpdateImage;
   std::function<void()> save_scroll_position_;
   std::function<void()> restore_scroll_position_;
+  std::function<bool()> can_save_scroll_position_;
   QList<QPixmap> source_;
   QList<QFuture<QImage>> pending_;
 };
@@ -88,7 +91,9 @@ inline void CachedImagesList::DisplayImage() {
   // Held by value (QPixmap is copy-on-write): processEvents() below may run
   // navigation that mutates the cache, which would dangle a reference here.
   QPixmap const image = ResolvedSource(index());
-  save_scroll_position_();
+  if (!can_save_scroll_position_ || can_save_scroll_position_()) {
+    save_scroll_position_();
+  }
   UpdateImage(image);
   restore_scroll_position_();
   QCoreApplication::processEvents(QEventLoop::AllEvents, 10);

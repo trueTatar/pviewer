@@ -56,6 +56,10 @@ class MainWindow : public QGraphicsView {
   void rebuildActiveImages(QString const& preferred_path, int fallback_position);
   void applyPanelEntries(QVector<ImageEntry> entries);
   void activatePanelImage(QString path);
+  void deletePanelImage(QString path);
+  void navigateToPreviousImage();
+  void navigateToNextImage();
+  void moveCurrentImage(int offset);
   void updatePanelCurrentImage();
   QString currentImagePath() const;
   bool hasActiveImages() const;
@@ -115,10 +119,7 @@ class MainWindow::AutoScrolling : public QObject {
       ToggleState(delay_before_scrolling_);
     } else {
       if (isScrolledToBottom()) {
-        if (main_window_.hasActiveImages()) {
-          main_window_.move->moveTo<NextImage>();
-          main_window_.updatePanelCurrentImage();
-        }
+        main_window_.navigateToNextImage();
         return;
       }
       ToggleState(scroll_tick_);

@@ -30,6 +30,17 @@ TEST(ImageComparisonModelTest, MoveReordersEnabledPaths) {
   EXPECT_EQ(model.EnabledPaths(), Paths({"c.png", "a.png", "b.png"}));
 }
 
+TEST(ImageComparisonModelTest, MovePathReordersByImageIdentity) {
+  ImageComparisonModel model;
+  model.SetImages(Paths({"a.png", "b.png", "c.png"}));
+
+  ASSERT_TRUE(model.MovePath("b.png", 1));
+
+  EXPECT_EQ(model.EnabledPaths(), Paths({"a.png", "c.png", "b.png"}));
+  EXPECT_FALSE(model.MovePath("missing.png", 1));
+  EXPECT_FALSE(model.MovePath("b.png", 1));
+}
+
 TEST(ImageComparisonModelTest, CurrentEnabledImageKeepsActivePosition) {
   ImageComparisonModel model;
   model.SetImages(Paths({"a.png", "b.png", "c.png"}));
@@ -51,6 +62,16 @@ TEST(ImageComparisonModelTest, UnknownImageHasNoActivePosition) {
   model.SetImages(Paths({"a.png", "b.png", "c.png"}));
 
   EXPECT_EQ(model.EnabledPositionFor("missing.png"), 0);
+}
+
+TEST(ImageComparisonModelTest, RemovePathDropsImageFromComparison) {
+  ImageComparisonModel model;
+  model.SetImages(Paths({"a.png", "b.png", "c.png"}));
+
+  ASSERT_TRUE(model.RemovePath("b.png"));
+
+  EXPECT_EQ(model.EnabledPaths(), Paths({"a.png", "c.png"}));
+  EXPECT_FALSE(model.RemovePath("missing.png"));
 }
 
 TEST(ImageComparisonModelTest, NoEnabledImagesHaveNoActivePosition) {

@@ -17,10 +17,16 @@ class ImagesListPanel : public QDialog {
  signals:
   void entriesChanged(QVector<ImageEntry> entries);
   void imageActivated(QString path);
+  void imageDeleteRequested(QString path);
+  void previousImageRequested();
+  void nextImageRequested();
+  void zoomInRequested();
+  void zoomOutRequested();
 
  private:
   void RebuildList();
   void SyncEntriesFromList();
+  void MoveSelectedRow(int offset);
   void ScheduleEntriesSync();
   void EmitEntriesChanged();
 

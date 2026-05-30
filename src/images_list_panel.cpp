@@ -3,6 +3,7 @@
 #include <QAbstractItemModel>
 #include <QBrush>
 #include <QColor>
+#include <QShortcut>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -35,6 +36,35 @@ ImagesListPanel::ImagesListPanel(QWidget* parent)
             if (!item || item->checkState() != Qt::Checked) return;
             emit imageActivated(item->data(Qt::UserRole).toString());
           });
+  auto* delete_shortcut = new QShortcut(QKeySequence::Delete, list_);
+  connect(delete_shortcut, &QShortcut::activated, this, [this] {
+    QListWidgetItem* item = list_->currentItem();
+    if (item) emit imageDeleteRequested(item->data(Qt::UserRole).toString());
+  });
+  auto* previous_shortcut =
+      new QShortcut(QKeySequence(QStringLiteral("Ctrl+Left")), this);
+  connect(previous_shortcut, &QShortcut::activated, this,
+          &ImagesListPanel::previousImageRequested);
+  auto* next_shortcut =
+      new QShortcut(QKeySequence(QStringLiteral("Ctrl+Right")), this);
+  connect(next_shortcut, &QShortcut::activated, this,
+          &ImagesListPanel::nextImageRequested);
+  auto* move_up_shortcut =
+      new QShortcut(QKeySequence(QStringLiteral("Alt+Up")), this);
+  connect(move_up_shortcut, &QShortcut::activated, this,
+          [this] { MoveSelectedRow(-1); });
+  auto* move_down_shortcut =
+      new QShortcut(QKeySequence(QStringLiteral("Alt+Down")), this);
+  connect(move_down_shortcut, &QShortcut::activated, this,
+          [this] { MoveSelectedRow(1); });
+  auto* zoom_in_shortcut =
+      new QShortcut(QKeySequence(QStringLiteral("+")), this);
+  connect(zoom_in_shortcut, &QShortcut::activated, this,
+          &ImagesListPanel::zoomInRequested);
+  auto* zoom_out_shortcut =
+      new QShortcut(QKeySequence(QStringLiteral("-")), this);
+  connect(zoom_out_shortcut, &QShortcut::activated, this,
+          &ImagesListPanel::zoomOutRequested);
 
   connect(list_->model(), &QAbstractItemModel::rowsMoved, this,
           [this] { ScheduleEntriesSync(); });
@@ -62,8 +92,9 @@ void ImagesListPanel::RebuildList() {
   list_->clear();
   for (const ImageEntry& entry : entries_) {
     const bool is_current = entry.path == current_path_;
-    auto* item = new QListWidgetItem(
-        is_current ? entry.path + QStringLiteral("  (Current)") : entry.path);
+    QString text = entry.path;
+    if (is_current) text += QStringLiteral("  (Current)");
+    auto* item = new QListWidgetItem(text);
     item->setToolTip(entry.path);
     item->setData(Qt::UserRole, entry.path);
     item->setCheckState(entry.enabled ? Qt::Checked : Qt::Unchecked);
@@ -88,6 +119,21 @@ void ImagesListPanel::SyncEntriesFromList() {
     });
   }
   entries_ = std::move(entries);
+}
+
+void ImagesListPanel::MoveSelectedRow(int offset) {
+  const int from = list_->currentRow();
+  const int to = from + offset;
+  if (from < 0 || to < 0 || to >= list_->count()) return;
+
+  updating_ = true;
+  QListWidgetItem* item = list_->takeItem(from);
+  list_->insertItem(to, item);
+  list_->setCurrentRow(to);
+  updating_ = false;
+
+  SyncEntriesFromList();
+  EmitEntriesChanged();
 }
 
 void ImagesListPanel::ScheduleEntriesSync() {

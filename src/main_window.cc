@@ -1,6 +1,7 @@
 #include "main_window.hpp"
 
 #include <QApplication>
+#include <QFile>
 #include <algorithm>
 
 #include "cached_images_list.hpp"
@@ -84,6 +85,41 @@ void MainWindow::activatePanelImage(QString path) {
   rebuildActiveImages(path, 1);
 }
 
+void MainWindow::deletePanelImage(QString path) {
+  const QString preferred_path = currentImagePath();
+  const int fallback_position = comparison_model_.EnabledPositionFor(path);
+
+  if (!QFile::moveToTrash(path)) {
+    MessageBox::inform(QString("Failed to delete: ") + path, 1500);
+    return;
+  }
+
+  comparison_model_.RemovePath(path);
+  images_panel_->SetEntries(comparison_model_.Entries());
+  rebuildActiveImages(preferred_path == path ? QString() : preferred_path,
+                      fallback_position);
+}
+
+void MainWindow::navigateToPreviousImage() {
+  if (!hasActiveImages()) return;
+  move->moveTo<PreviousImage>();
+  updatePanelCurrentImage();
+}
+
+void MainWindow::navigateToNextImage() {
+  if (!hasActiveImages()) return;
+  move->moveTo<NextImage>();
+  updatePanelCurrentImage();
+}
+
+void MainWindow::moveCurrentImage(int offset) {
+  const QString path = currentImagePath();
+  if (path.isEmpty() || !comparison_model_.MovePath(path, offset)) return;
+
+  images_panel_->SetEntries(comparison_model_.Entries());
+  rebuildActiveImages(path, 1);
+}
+
 void MainWindow::updatePanelCurrentImage() {
   images_panel_->SetCurrentPath(currentImagePath());
 }
@@ -161,6 +197,16 @@ void MainWindow::Construct() {
           &MainWindow::applyPanelEntries);
   connect(images_panel_, &ImagesListPanel::imageActivated, this,
           &MainWindow::activatePanelImage);
+  connect(images_panel_, &ImagesListPanel::imageDeleteRequested, this,
+          &MainWindow::deletePanelImage);
+  connect(images_panel_, &ImagesListPanel::previousImageRequested, this,
+          &MainWindow::navigateToPreviousImage);
+  connect(images_panel_, &ImagesListPanel::nextImageRequested, this,
+          &MainWindow::navigateToNextImage);
+  connect(images_panel_, &ImagesListPanel::zoomInRequested, this,
+          [this] { zoomBy(1.25); });
+  connect(images_panel_, &ImagesListPanel::zoomOutRequested, this,
+          [this] { zoomBy(0.8); });
   connect(folders_.get(), &FolderPath::folderIsChanged, [this] {
     if (hasActiveImages()) move->moveTo<BeginOfTheList>();
     clearImage();
@@ -265,16 +311,26 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
       break;
     }
     case Qt::Key_Right: {
-      if ((pe->modifiers() & Qt::ControlModifier) && hasActiveImages()) {
-        move->moveTo<NextImage>();
-        updatePanelCurrentImage();
+      if (pe->modifiers() & Qt::ControlModifier) {
+        navigateToNextImage();
       }
       break;
     }
     case Qt::Key_Left: {
-      if ((pe->modifiers() & Qt::ControlModifier) && hasActiveImages()) {
-        move->moveTo<PreviousImage>();
-        updatePanelCurrentImage();
+      if (pe->modifiers() & Qt::ControlModifier) {
+        navigateToPreviousImage();
+      }
+      break;
+    }
+    case Qt::Key_Up: {
+      if (pe->modifiers() == Qt::AltModifier) {
+        moveCurrentImage(-1);
+      }
+      break;
+    }
+    case Qt::Key_Down: {
+      if (pe->modifiers() == Qt::AltModifier) {
+        moveCurrentImage(1);
       }
       break;
     }
@@ -336,16 +392,10 @@ void MainWindow::mousePressEvent(QMouseEvent* pe) {
     wheel_scrolling->ToggleOrientation();
   }
   if (pe->button() & Qt::LeftButton) {
-    if (hasActiveImages()) {
-      move->moveTo<PreviousImage>();
-      updatePanelCurrentImage();
-    }
+    navigateToPreviousImage();
   }
   if (pe->button() & Qt::RightButton) {
-    if (hasActiveImages()) {
-      move->moveTo<NextImage>();
-      updatePanelCurrentImage();
-    }
+    navigateToNextImage();
   }
   QWidget::mousePressEvent(pe);
 }

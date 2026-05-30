@@ -44,7 +44,8 @@ pviewer [images]...
 - **[**: go to previous folder (if subdirectories were loaded)
 - **s**: scale image to screen width and back to the standard image width
 - **+ / =**: zoom in; **-**: zoom out (relative to the fit-to-width view); **0**: reset zoom to fit. The zoom level is shared across images, so switching between them keeps the same scale for comparison.
-- **l**: show or hide the comparison list panel, where images can be enabled, disabled, reordered, and opened by double-click
+- **l**: show or hide the comparison list panel, where images can be enabled, disabled, reordered with Alt+Up / Alt+Down, opened by double-click, and moved to trash with Delete
+- **Alt + Up / Alt + Down**: move the current image up or down in the comparison order
 - **Right_Arrow + Ctrl**: display the next image
 - **Left_Arrow + Ctrl**: display the previous image
 - **o**: open dialog window, which allows choosing content to display

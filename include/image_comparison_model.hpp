@@ -46,6 +46,19 @@ class ImageComparisonModel {
     return true;
   }
 
+  bool MovePath(QString const& path, int offset) {
+    const int from = RowOf(path);
+    if (from < 0) return false;
+    return Move(from, from + offset);
+  }
+
+  bool RemovePath(QString const& path) {
+    const int row = RowOf(path);
+    if (row < 0) return false;
+    entries_.removeAt(row);
+    return true;
+  }
+
   int EnabledPositionFor(QString const& path) const {
     if (entries_.isEmpty()) return 0;
 

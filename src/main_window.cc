@@ -100,6 +100,12 @@ void MainWindow::deletePanelImage(QString path) {
                       fallback_position);
 }
 
+void MainWindow::deleteCurrentImage() {
+  const QString path = currentImagePath();
+  if (path.isEmpty()) return;
+  deletePanelImage(path);
+}
+
 void MainWindow::navigateToPreviousImage() {
   if (!hasActiveImages()) return;
   move->moveTo<PreviousImage>();
@@ -307,6 +313,12 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
     case Qt::Key_L: {
       if (pe->modifiers() == Qt::NoModifier) {
         toggleImagesListPanel();
+      }
+      break;
+    }
+    case Qt::Key_Delete: {
+      if (pe->modifiers() == Qt::NoModifier) {
+        deleteCurrentImage();
       }
       break;
     }

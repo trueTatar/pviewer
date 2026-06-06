@@ -32,9 +32,11 @@ cmake --build build
 
 ### Usage
 ```plaintext
+pviewer
 pviewer [folder_with_images] [image_number_to_start_with]
 pviewer [images]...
 ```
+- Without arguments, `pviewer` opens `${HOME}/.Compare` and creates it if needed.
 - The first option will load all images in the `folder_with_images` directory. Additionally, with `image_number_to_start_with`, you can specify which image you want to display (starting from 1).
 - The second option involves loading individual images, numbered with `images...`.
 
@@ -45,6 +47,7 @@ pviewer [images]...
 - **s**: scale image to screen width and back to the standard image width
 - **+ / =**: zoom in; **-**: zoom out (relative to the fit-to-width view); **0**: reset zoom to fit. The zoom level is shared across images, so switching between them keeps the same scale for comparison.
 - **l**: show or hide the comparison list panel, where images can be enabled, disabled, reordered with Alt+Up / Alt+Down, opened by double-click, and moved to trash with Delete
+- **Delete**: move the currently displayed image to trash
 - **Alt + Up / Alt + Down**: move the current image up or down in the comparison order
 - **Right_Arrow + Ctrl**: display the next image
 - **Left_Arrow + Ctrl**: display the previous image

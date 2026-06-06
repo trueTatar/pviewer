@@ -57,6 +57,7 @@ class MainWindow : public QGraphicsView {
   void applyPanelEntries(QVector<ImageEntry> entries);
   void activatePanelImage(QString path);
   void deletePanelImage(QString path);
+  void deleteCurrentImage();
   void navigateToPreviousImage();
   void navigateToNextImage();
   void moveCurrentImage(int offset);

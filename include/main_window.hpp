@@ -11,6 +11,7 @@
 class CachedImagesList;
 class ImagesSelectorDialog;
 class ImagesListPanel;
+class QSystemTrayIcon;
 
 class MainWindow : public QGraphicsView {
   Q_OBJECT
@@ -63,6 +64,8 @@ class MainWindow : public QGraphicsView {
   void navigateToPreviousImage();
   void navigateToNextImage();
   void moveCurrentImage(int offset);
+  void copyCurrentImageToClipboard();
+  void showCopyNotification(QString const& path);
   void updatePanelCurrentImage();
   QString currentImagePath() const;
   bool hasActiveImages() const;
@@ -83,6 +86,7 @@ class MainWindow : public QGraphicsView {
   ArrowKeysScroller* arrows_scroller_;
   ImagesSelectorDialog* m_psd;
   ImagesListPanel* images_panel_;
+  QSystemTrayIcon* tray_icon_;
   QScreen* currentScreen;
   QGraphicsScene* scene_;
   QGraphicsPixmapItem* item_;

@@ -1,12 +1,52 @@
 #include "main_window.hpp"
 
 #include <QApplication>
+#include <QClipboard>
 #include <QFile>
+#include <QFileInfo>
+#include <QMimeData>
+#include <QProcess>
+#include <QStringList>
+#include <QStyle>
+#include <QSystemTrayIcon>
+#include <QUrl>
 #include <algorithm>
 
 #include "cached_images_list.hpp"
 #include "images_list_panel.hpp"
 #include "images_selector_dialog.hpp"
+
+namespace {
+
+constexpr int kCopyNotificationTimeoutMs = 1500;
+
+bool ShowFlashNotifyNotification(QString const& path) {
+#ifdef Q_OS_LINUX
+  const QString file_name = QFileInfo(path).fileName();
+  const QStringList args{
+      QStringLiteral("--app"),
+      QStringLiteral("Image Viewer"),
+      QStringLiteral("--key"),
+      QStringLiteral("pviewer-copy"),
+      QStringLiteral("--timeout"),
+      QString::number(kCopyNotificationTimeoutMs / 1000.0, 'f', 1),
+      QStringLiteral("--image"),
+      path,
+      QStringLiteral("Copied to clipboard"),
+      file_name,
+  };
+  return QProcess::startDetached(QStringLiteral("flash-notify"), args) ||
+         QProcess::startDetached(
+             QStringLiteral("/home/user/.local/configs/bin/lib/notifications/"
+                            "flash-notify.sh"),
+             args);
+#else
+  Q_UNUSED(path);
+  return false;
+#endif
+}
+
+}  // namespace
 
 void MainWindow::formatWidget() {
   setMinimumSize(640, 360);
@@ -137,6 +177,39 @@ void MainWindow::moveCurrentImage(int offset) {
   rebuildActiveImages(path, 1);
 }
 
+void MainWindow::copyCurrentImageToClipboard() {
+  const QString path = currentImagePath();
+  if (path.isEmpty()) return;
+
+  auto* mime_data = new QMimeData();
+  mime_data->setUrls({QUrl::fromLocalFile(path)});
+  mime_data->setText(path);
+  QApplication::clipboard()->setMimeData(mime_data, QClipboard::Clipboard);
+  showCopyNotification(path);
+}
+
+void MainWindow::showCopyNotification(QString const& path) {
+  const QString file_name = QFileInfo(path).fileName();
+  if (ShowFlashNotifyNotification(path)) return;
+
+  if (!QSystemTrayIcon::supportsMessages()) return;
+
+  if (tray_icon_ == nullptr) {
+    tray_icon_ = new QSystemTrayIcon(this);
+    QIcon icon = windowIcon();
+    if (icon.isNull()) {
+      icon = QApplication::style()->standardIcon(QStyle::SP_FileIcon);
+    }
+    tray_icon_->setIcon(icon);
+    tray_icon_->setToolTip(QStringLiteral("Image Viewer"));
+    tray_icon_->show();
+  }
+
+  tray_icon_->showMessage(QStringLiteral("Copied to clipboard"),
+                          file_name, QSystemTrayIcon::Information,
+                          kCopyNotificationTimeoutMs);
+}
+
 void MainWindow::updatePanelCurrentImage() {
   images_panel_->SetCurrentPath(currentImagePath());
 }
@@ -208,6 +281,7 @@ void MainWindow::Construct() {
       new ArrowKeysScroller(horizontalScrollBar(), verticalScrollBar());
   m_psd = new ImagesSelectorDialog(this);
   images_panel_ = new ImagesListPanel(this);
+  tray_icon_ = nullptr;
   formatWidget();
 
   connect(images_panel_, &ImagesListPanel::entriesChanged, this,
@@ -358,6 +432,12 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
     case Qt::Key_Down: {
       if (pe->modifiers() == Qt::AltModifier) {
         moveCurrentImage(1);
+      }
+      break;
+    }
+    case Qt::Key_C: {
+      if (pe->modifiers() == Qt::ControlModifier) {
+        copyCurrentImageToClipboard();
       }
       break;
     }

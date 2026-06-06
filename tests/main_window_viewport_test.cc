@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 
 #include <QApplication>
+#include <QClipboard>
 #include <QColor>
 #include <QImage>
 #include <QKeyEvent>
+#include <QMimeData>
 #include <QScrollBar>
 #include <QTemporaryDir>
 
@@ -84,6 +86,28 @@ TEST(MainWindowViewportTest, HidesCurrentImageAndDisplaysNextActiveImage) {
   SendKey(window, Qt::Key_H);
 
   EXPECT_EQ(window.sceneRect().size(), QSizeF(640, 360));
+}
+
+TEST(MainWindowViewportTest, CopiesCurrentImageFileToClipboard) {
+  QTemporaryDir dir;
+  ASSERT_TRUE(dir.isValid());
+
+  const QString image =
+      MakeImage(dir, "image.png", QSize(320, 240), QColor(180, 0, 0));
+
+  MainWindow window(QList<QString>{image});
+  window.resize(800, 600);
+  window.show();
+  QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+
+  QApplication::clipboard()->clear();
+  SendKey(window, Qt::Key_C, Qt::ControlModifier);
+
+  const QMimeData* mime_data = QApplication::clipboard()->mimeData();
+  ASSERT_TRUE(mime_data->hasUrls());
+  ASSERT_EQ(mime_data->urls().size(), 1);
+  EXPECT_EQ(mime_data->urls().first().toLocalFile(), image);
+  EXPECT_EQ(mime_data->text(), image);
 }
 
 TEST(MainWindowViewportTest,

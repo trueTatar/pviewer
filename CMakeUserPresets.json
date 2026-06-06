@@ -1,0 +1,17 @@
+{
+  "version": 8,
+  "configurePresets": [
+    {
+      "name": "configure-clang",
+      "displayName": "Clang 20.1.8 x86_64-pc-linux-gnu",
+      "description": "Using compilers: C = /usr/bin/clang-20, CXX = /usr/bin/clang++-20",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+        "CMAKE_C_COMPILER": "/usr/bin/clang-20",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++-20",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ]
+}

@@ -44,8 +44,9 @@ pviewer [images]...
 - **q**: enable/disable autoscrolling
 - **]**: go to next folder (if subdirectories were loaded)
 - **[**: go to previous folder (if subdirectories were loaded)
-- **s**: scale image to screen width and back to the standard image width
-- **+ / =**: zoom in; **-**: zoom out (relative to the fit-to-width view); **0**: reset zoom to fit. The zoom level is shared across images, so switching between them keeps the same scale for comparison.
+- **s**: fit the image to the viewer and back to the standard image size
+- **+ / =**: zoom in; **-**: zoom out (relative to the fit-to-view scale); **0**: reset zoom to fit. The zoom level is shared across images, so switching between them keeps the same scale for comparison.
+- **h**: hide the currently displayed image from the comparison list
 - **l**: show or hide the comparison list panel, where images can be enabled, disabled, reordered with Alt+Up / Alt+Down, opened by double-click, and moved to trash with Delete
 - **Delete**: move the currently displayed image to trash
 - **Alt + Up / Alt + Down**: move the current image up or down in the comparison order

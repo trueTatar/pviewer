@@ -48,16 +48,18 @@ class MainWindow : public QGraphicsView {
   // fit_zoom_ * zoom_factor_ as the view transform. Single source of truth for
   // all zoom state changes.
   void applyZoom();
-  void fitToWidth();
+  void fitToView();
   void zoomBy(double factor);
   void toggleFitNative();
   void toggleImagesListPanel();
   void setComparisonImages(QList<QString> list, int position);
-  void rebuildActiveImages(QString const& preferred_path, int fallback_position);
+  void rebuildActiveImages(QString const& preferred_path,
+                           int fallback_position);
   void applyPanelEntries(QVector<ImageEntry> entries);
   void activatePanelImage(QString path);
   void deletePanelImage(QString path);
   void deleteCurrentImage();
+  void hideCurrentImage();
   void navigateToPreviousImage();
   void navigateToNextImage();
   void moveCurrentImage(int offset);
@@ -65,7 +67,7 @@ class MainWindow : public QGraphicsView {
   QString currentImagePath() const;
   bool hasActiveImages() const;
 
-  // zoom_factor_ is [kMinZoom, kMaxZoom] relative to fit-to-width.
+  // zoom_factor_ is [kMinZoom, kMaxZoom] relative to fit-to-view.
   // fit_zoom_ is recomputed per image; it is NOT a session property.
   static constexpr double kMinZoom = 0.01;
   static constexpr double kMaxZoom = 32.0;
@@ -84,8 +86,9 @@ class MainWindow : public QGraphicsView {
   QScreen* currentScreen;
   QGraphicsScene* scene_;
   QGraphicsPixmapItem* item_;
-  double fit_zoom_ = 1.0;    // viewport_width / image_width for current image
-  double zoom_factor_ = 1.0; // user multiplier relative to fit; shared across images
+  double fit_zoom_ = 1.0;  // scale that fits the current image in the viewport
+  double zoom_factor_ =
+      1.0;  // user multiplier relative to fit; shared across images
   bool is_fitted_ = true;
 
  signals:

@@ -1,6 +1,6 @@
-#include <gtest/gtest.h>
-
 #include "image_comparison_model.hpp"
+
+#include <gtest/gtest.h>
 
 namespace {
 
@@ -19,6 +19,16 @@ TEST(ImageComparisonModelTest, EnabledPathsFollowCheckboxState) {
   ASSERT_TRUE(model.SetEnabled(1, false));
 
   EXPECT_EQ(model.EnabledPaths(), Paths({"a.png", "c.png"}));
+}
+
+TEST(ImageComparisonModelTest, SetPathEnabledUpdatesCheckboxStateByIdentity) {
+  ImageComparisonModel model;
+  model.SetImages(Paths({"a.png", "b.png", "c.png"}));
+
+  ASSERT_TRUE(model.SetPathEnabled("b.png", false));
+
+  EXPECT_EQ(model.EnabledPaths(), Paths({"a.png", "c.png"}));
+  EXPECT_FALSE(model.SetPathEnabled("missing.png", false));
 }
 
 TEST(ImageComparisonModelTest, MoveReordersEnabledPaths) {

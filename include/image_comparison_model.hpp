@@ -19,7 +19,9 @@ class ImageComparisonModel {
     }
   }
 
-  void SetEntries(QVector<ImageEntry> entries) { entries_ = std::move(entries); }
+  void SetEntries(QVector<ImageEntry> entries) {
+    entries_ = std::move(entries);
+  }
 
   const QVector<ImageEntry>& Entries() const { return entries_; }
 
@@ -35,6 +37,11 @@ class ImageComparisonModel {
     if (!IsValidRow(row)) return false;
     entries_[row].enabled = enabled;
     return true;
+  }
+
+  bool SetPathEnabled(QString const& path, bool enabled) {
+    const int row = RowOf(path);
+    return SetEnabled(row, enabled);
   }
 
   bool Move(int from, int to) {

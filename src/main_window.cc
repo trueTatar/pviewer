@@ -5,8 +5,8 @@
 #include <algorithm>
 
 #include "cached_images_list.hpp"
-#include "images_selector_dialog.hpp"
 #include "images_list_panel.hpp"
+#include "images_selector_dialog.hpp"
 
 void MainWindow::formatWidget() {
   setMinimumSize(640, 360);
@@ -21,12 +21,15 @@ void MainWindow::formatWidget() {
 
 void MainWindow::applyZoom() {
   if (item_->pixmap().isNull()) return;
-  fit_zoom_ = viewport()->width() / qreal(item_->pixmap().width());
+  const QSize pixmap_size = item_->pixmap().size();
+  if (pixmap_size.width() <= 0 || pixmap_size.height() <= 0) return;
+  fit_zoom_ = std::min(viewport()->width() / qreal(pixmap_size.width()),
+                       viewport()->height() / qreal(pixmap_size.height()));
   const double s = fit_zoom_ * zoom_factor_;
   setTransform(QTransform::fromScale(s, s));
 }
 
-void MainWindow::fitToWidth() {
+void MainWindow::fitToView() {
   zoom_factor_ = 1.0;
   is_fitted_ = true;
   applyZoom();
@@ -42,7 +45,7 @@ void MainWindow::zoomBy(double factor) {
 void MainWindow::toggleFitNative() {
   if (!imageDisplayed()) return;
   if (!is_fitted_) {
-    fitToWidth();
+    fitToView();
   } else {
     // Native: 1 source pixel = 1 screen pixel for the current image.
     // zoom_factor_ = 1/fit_zoom_ makes fit_zoom_ * zoom_factor_ = 1.0.
@@ -104,6 +107,14 @@ void MainWindow::deleteCurrentImage() {
   const QString path = currentImagePath();
   if (path.isEmpty()) return;
   deletePanelImage(path);
+}
+
+void MainWindow::hideCurrentImage() {
+  const QString path = currentImagePath();
+  if (path.isEmpty() || !comparison_model_.SetPathEnabled(path, false)) return;
+
+  images_panel_->SetEntries(comparison_model_.Entries());
+  rebuildActiveImages(path, 1);
 }
 
 void MainWindow::navigateToPreviousImage() {
@@ -181,8 +192,8 @@ void MainWindow::Construct() {
   initial_task_queue = cache_capacity = 10;
   images_ = std::make_shared<ImagePath>();
   images_->CreateTaskQueue<TaskQueue>(initial_task_queue);
-  cache_ =
-      images_->CreateCacheObject<CachedImagesList>(cache_capacity, update_image);
+  cache_ = images_->CreateCacheObject<CachedImagesList>(cache_capacity,
+                                                        update_image);
 
   cache_->SetScrollCallbacks(
       std::bind(&SlidersState::SaveScrollPosition, sliders_state.get()),
@@ -221,12 +232,10 @@ void MainWindow::Construct() {
     clearImage();
     m_psd->exec();
   });
-  connect(this, &MainWindow::displayImageNumber,
-          [this] {
-            MessageBox::inform(
-                hasActiveImages() ? images_->imageNumber() : QString("0 / 0"),
-                1000);
-          });
+  connect(this, &MainWindow::displayImageNumber, [this] {
+    MessageBox::inform(
+        hasActiveImages() ? images_->imageNumber() : QString("0 / 0"), 1000);
+  });
   connect(this, &MainWindow::repaintImage, [this] {
     if (imageDisplayed()) {
       cache_.get()->DisplayImage();
@@ -307,7 +316,13 @@ void MainWindow::keyPressEvent(QKeyEvent* pe) {
       break;
     }
     case Qt::Key_0: {
-      fitToWidth();
+      fitToView();
+      break;
+    }
+    case Qt::Key_H: {
+      if (pe->modifiers() == Qt::NoModifier) {
+        hideCurrentImage();
+      }
       break;
     }
     case Qt::Key_L: {
@@ -445,6 +460,4 @@ void MainWindow::mouseDoubleClickEvent(QMouseEvent* pe) {
   mousePressEvent(pe);
 }
 
-bool MainWindow::imageDisplayed() {
-  return !item_->pixmap().isNull();
-}
+bool MainWindow::imageDisplayed() { return !item_->pixmap().isNull(); }

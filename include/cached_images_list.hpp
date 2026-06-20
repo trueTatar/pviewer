@@ -10,12 +10,14 @@
 
 #include "abstract_image_cache.hpp"
 #include "abstract_image_location.hpp"
+#include "ssh_image_source.hpp"
 
 using update_image_t = std::function<void(QPixmap const&)>;
 
-// Zoom and scaling now live entirely in the view layer (MainWindow / QGraphicsView).
-// CachedImagesList is responsible only for: async decode, cache eviction, and
-// handing source pixmaps to the view via the update_image callback.
+// Zoom and scaling now live entirely in the view layer (MainWindow /
+// QGraphicsView). CachedImagesList is responsible only for: async decode, cache
+// eviction, and handing source pixmaps to the view via the update_image
+// callback.
 class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
  public:
   CachedImagesList(std::size_t capacity, info_t const&, update_image_t);
@@ -38,8 +40,12 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
     const QString path = *value;
     qDebug() << "-- Caching (async)" << path;
     QFuture<QImage> future = QtConcurrent::run([path] {
-      QImage image(path);
-      if (image.isNull()) qWarning() << "Failed to load image:" << path;
+      QString error;
+      QImage image =
+          IsSshImageUrl(path) ? LoadSshImage(path, &error) : QImage(path);
+      if (image.isNull()) {
+        qWarning() << "Failed to load image:" << path << error;
+      }
       return image;
     });
     (source_.*op)(QPixmap{});

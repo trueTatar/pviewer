@@ -35,6 +35,7 @@ class ImagesSelectorDialog : public QDialog {
   QPushButton* createButton(QString);
   QPushButton* createButton(QString, void (ImagesSelectorDialog::*)());
   void selectImages();
+  void selectImagesViaSsh();
   void selectAllImagesInSubdirectories();
   void selectAllImagesInDirectory(GetDirectoryVia, QDir, int = 1);
 

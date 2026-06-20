@@ -1,18 +1,21 @@
 #include "images_selector_dialog.hpp"
 
-#include "image_formats.hpp"
-
 #include <QApplication>
 #include <QCollator>
 #include <QFileDialog>
 #include <QGridLayout>
+#include <QInputDialog>
 #include <QKeyEvent>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTimer>
 
-QPushButton* ImagesSelectorDialog::createButton(QString name,
-                                           void (ImagesSelectorDialog::*pointer)()) {
+#include "image_formats.hpp"
+#include "ssh_image_source.hpp"
+
+QPushButton* ImagesSelectorDialog::createButton(
+    QString name, void (ImagesSelectorDialog::*pointer)()) {
   QPushButton* button = new QPushButton(name);
   connect(button, &QPushButton::clicked, this, pointer);
   return button;
@@ -40,6 +43,8 @@ ImagesSelectorDialog::ImagesSelectorDialog(QWidget* parent)
       createButton("&File(s)", &ImagesSelectorDialog::selectImages), 0, 0);
   buttonLayout->addWidget(createButton("&Directory"), 0, 1);
   buttonLayout->addWidget(createButton("&Embedded"), 0, 2);
+  buttonLayout->addWidget(
+      createButton("&SSH", &ImagesSelectorDialog::selectImagesViaSsh), 0, 3);
 }
 
 void ImagesSelectorDialog::setDirectory(QString path, int pos) {
@@ -62,8 +67,36 @@ void ImagesSelectorDialog::selectImages() {
   emit stringListPrepared(pixmap_list, 1);
 }
 
+void ImagesSelectorDialog::selectImagesViaSsh() {
+  bool ok = true;
+  QString directory_url;
+  if (clipboard_checkbox_->isChecked()) {
+    clipboard_checkbox_->setChecked(false);
+    directory_url = QApplication::clipboard()->text();
+  } else {
+    directory_url = QInputDialog::getText(
+        this, QStringLiteral("SSH directory"), QStringLiteral("SFTP URL:"),
+        QLineEdit::Normal, QStringLiteral("sftp://user@host/path"), &ok);
+  }
+
+  directory_url = directory_url.trimmed();
+  if (!ok || directory_url.isEmpty()) return;
+
+  QString error;
+  QList<QString> pixmap_list = ListSshImages(directory_url, &error);
+  if (pixmap_list.isEmpty()) {
+    QMessageBox::warning(
+        this, QStringLiteral("SSH directory"),
+        error.isEmpty() ? QStringLiteral("No supported images found.") : error);
+    return;
+  }
+
+  accept();
+  emit stringListPrepared(pixmap_list, 1);
+}
+
 void ImagesSelectorDialog::selectAllImagesInDirectory(GetDirectoryVia opt,
-                                                 QDir directory, int pos) {
+                                                      QDir directory, int pos) {
   accept();
   if (clipboard_checkbox_->isChecked()) {
     clipboard_checkbox_->setChecked(false);
@@ -112,7 +145,8 @@ void ImagesSelectorDialog::sortItems(QList<QString>& list) {
   std::sort(list.begin(), list.end(), collator);
 }
 
-void ImagesSelectorDialog::convertPathsToAbsolute(QDir dir, QList<QString>& list) {
+void ImagesSelectorDialog::convertPathsToAbsolute(QDir dir,
+                                                  QList<QString>& list) {
   for (QString& path : list) {
     path = dir.absoluteFilePath(path);
   }

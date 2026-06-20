@@ -7,12 +7,14 @@ set(HEADER_LIST "${photo_viewer_SOURCE_DIR}/include/main_window.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/image_comparison_model.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/arrow_keys_scroller.hpp"
                 "${photo_viewer_SOURCE_DIR}/include/image_formats.hpp"
-                "${photo_viewer_SOURCE_DIR}/include/global_path.hpp")
+                "${photo_viewer_SOURCE_DIR}/include/global_path.hpp"
+                "${photo_viewer_SOURCE_DIR}/include/ssh_image_source.hpp")
 
 set(SOURCES_LIST "${photo_viewer_SOURCE_DIR}/src/main_window.cc"
                  "${photo_viewer_SOURCE_DIR}/src/arrow_keys_scroller.cc"
                  "${photo_viewer_SOURCE_DIR}/src/images_list_panel.cpp"
-                 "${photo_viewer_SOURCE_DIR}/src/images_selector_dialog.cpp")
+                 "${photo_viewer_SOURCE_DIR}/src/images_selector_dialog.cpp"
+                 "${photo_viewer_SOURCE_DIR}/src/ssh_image_source.cpp")
 
 find_package(Qt5 COMPONENTS Widgets Network Concurrent)
 add_library(lib OBJECT ${SOURCES_LIST} ${HEADER_LIST})

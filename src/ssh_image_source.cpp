@@ -1,12 +1,10 @@
 #include "ssh_image_source.hpp"
 
-#include <QCollator>
-#include <QFileInfo>
 #include <QProcess>
 #include <QUrl>
-#include <algorithm>
 
 #include "image_formats.hpp"
+#include "image_list_order.hpp"
 
 namespace {
 
@@ -75,7 +73,7 @@ bool ParseSshUrl(QString const& value, SshLocation* location, QString* error) {
   return true;
 }
 
-QString RemoteFindCommand(QString const& path) {
+QString RemoteFindCommandPrefix(QString const& path) {
   QStringList suffix_expressions;
   for (QString const& suffix : SupportedImageSuffixes()) {
     suffix_expressions << QStringLiteral("-iname ") +
@@ -85,7 +83,16 @@ QString RemoteFindCommand(QString const& path) {
   return QStringLiteral("find ") + ShellQuote(path) +
          QStringLiteral(" -maxdepth 1 -type f \\( ") +
          suffix_expressions.join(QStringLiteral(" -o ")) +
-         QStringLiteral(" \\) -print0");
+         QStringLiteral(" \\)");
+}
+
+QString RemoteFindCommand(QString const& path) {
+  return RemoteFindCommandPrefix(path) +
+         QStringLiteral(" -printf '%T@\\0%p\\0'");
+}
+
+QString RemoteFindPathsCommand(QString const& path) {
+  return RemoteFindCommandPrefix(path) + QStringLiteral(" -print0");
 }
 
 QString RemoteCatCommand(QString const& path) {
@@ -102,12 +109,26 @@ QString UrlForRemotePath(SshLocation const& base, QString const& path) {
   return url.toString(QUrl::FullyEncoded);
 }
 
-QStringList SplitNullSeparated(QByteArray const& bytes) {
-  QStringList values;
-  for (QByteArray const& item : bytes.split('\0')) {
-    if (!item.isEmpty()) values << QString::fromUtf8(item);
+QList<ImageListEntry> ParseRemoteImageEntries(QByteArray const& bytes) {
+  const QList<QByteArray> fields = bytes.split('\0');
+  QList<ImageListEntry> entries;
+  entries.reserve(fields.size() / 2);
+  for (int i = 0; i + 1 < fields.size(); i += 2) {
+    bool ok = false;
+    const double modified_seconds = fields[i].toDouble(&ok);
+    if (!ok || fields[i + 1].isEmpty()) continue;
+    entries.push_back({QString::fromUtf8(fields[i + 1]),
+                       static_cast<qint64>(modified_seconds * 1000.0)});
   }
-  return values;
+  return entries;
+}
+
+QList<ImageListEntry> ParseRemoteImagePaths(QByteArray const& bytes) {
+  QList<ImageListEntry> entries;
+  for (QByteArray const& field : bytes.split('\0')) {
+    if (!field.isEmpty()) entries.push_back({QString::fromUtf8(field), 0});
+  }
+  return entries;
 }
 
 bool RunSshCommand(SshLocation const& location, QString const& remote_command,
@@ -163,24 +184,28 @@ QList<QString> ListSshImages(QString const& directory_url, QString* error) {
   if (!ParseSshUrl(directory_url, &location, error)) return {};
 
   QByteArray output;
+  bool has_modification_times = true;
   if (!RunSshCommand(location, RemoteFindCommand(location.path), kListTimeoutMs,
                      &output, error)) {
-    return {};
+    // BSD find has no -printf. Keep SSH browsing functional there, with the
+    // natural-name ordering used as the deterministic fallback.
+    if (!RunSshCommand(location, RemoteFindPathsCommand(location.path),
+                       kListTimeoutMs, &output, error)) {
+      return {};
+    }
+    if (error != nullptr) error->clear();
+    has_modification_times = false;
   }
 
-  QStringList paths = SplitNullSeparated(output);
-  QCollator collator;
-  collator.setNumericMode(true);
-  std::sort(paths.begin(), paths.end(),
-            [&](QString const& lhs, QString const& rhs) {
-              return collator.compare(QFileInfo(lhs).fileName(),
-                                      QFileInfo(rhs).fileName()) < 0;
-            });
+  QList<ImageListEntry> entries = has_modification_times
+                                      ? ParseRemoteImageEntries(output)
+                                      : ParseRemoteImagePaths(output);
+  SortImagesNewestFirst(entries);
 
   QList<QString> urls;
-  urls.reserve(paths.size());
-  for (QString const& path : paths) {
-    urls << UrlForRemotePath(location, path);
+  urls.reserve(entries.size());
+  for (ImageListEntry const& entry : entries) {
+    urls << UrlForRemotePath(location, entry.path);
   }
   return urls;
 }

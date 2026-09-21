@@ -1,8 +1,8 @@
 #include "images_selector_dialog.hpp"
 
 #include <QApplication>
-#include <QCollator>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGridLayout>
 #include <QInputDialog>
 #include <QKeyEvent>
@@ -12,6 +12,7 @@
 #include <QTimer>
 
 #include "image_formats.hpp"
+#include "image_list_order.hpp"
 #include "ssh_image_source.hpp"
 
 QPushButton* ImagesSelectorDialog::createButton(
@@ -112,10 +113,15 @@ void ImagesSelectorDialog::selectAllImagesInDirectory(GetDirectoryVia opt,
   }
 
   directory.setNameFilters(SupportedImageNameFilters());
-  QList<QString> pixmap_list = directory.entryList(QDir::Files);
-  sortItems(pixmap_list);
-  convertPathsToAbsolute(directory, pixmap_list);
-  emit stringListPrepared(pixmap_list, pos);
+  QList<ImageListEntry> entries;
+  const QFileInfoList file_infos = directory.entryInfoList(QDir::Files);
+  entries.reserve(file_infos.size());
+  for (QFileInfo const& info : file_infos) {
+    entries.push_back(
+        {info.absoluteFilePath(), info.lastModified().toMSecsSinceEpoch()});
+  }
+  SortImagesNewestFirst(entries);
+  emit stringListPrepared(ImagePaths(std::move(entries)), pos);
 }
 
 void ImagesSelectorDialog::selectAllImagesInSubdirectories() {
@@ -137,12 +143,6 @@ void ImagesSelectorDialog::selectAllImagesInSubdirectories() {
     QString first_item = dir_list.at(0);
     selectAllImagesInDirectory(GetDirectoryVia::k_Supplied, QDir(first_item));
   }
-}
-
-void ImagesSelectorDialog::sortItems(QList<QString>& list) {
-  QCollator collator;
-  collator.setNumericMode(true);
-  std::sort(list.begin(), list.end(), collator);
 }
 
 void ImagesSelectorDialog::convertPathsToAbsolute(QDir dir,

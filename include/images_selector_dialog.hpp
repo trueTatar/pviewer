@@ -31,7 +31,6 @@ class ImagesSelectorDialog : public QDialog {
 
  private:
   void convertPathsToAbsolute(QDir, QList<QString>&);
-  void sortItems(QList<QString>&);
   QPushButton* createButton(QString);
   QPushButton* createButton(QString, void (ImagesSelectorDialog::*)());
   void selectImages();

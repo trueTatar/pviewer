@@ -40,6 +40,9 @@ pviewer [images]...
 - The first option will load all images in the `folder_with_images` directory. Additionally, with `image_number_to_start_with`, you can specify which image you want to display (starting from 1).
 - The second option involves loading individual images, numbered with `images...`.
 
+Images loaded from a local or SSH directory are ordered by modification time,
+newest first. Images with the same timestamp use natural filename ordering.
+
 ### Hotkeys
 - **q**: enable/disable autoscrolling
 - **]**: go to next folder (if subdirectories were loaded)

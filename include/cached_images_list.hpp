@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QFuture>
 #include <QImage>
+#include <QImageReader>
 #include <QObject>
 #include <QPainter>
 #include <QtConcurrent>
@@ -41,8 +42,14 @@ class CachedImagesList : public Abstract::ImageCache<QString, QPixmap> {
     qDebug() << "-- Caching (async)" << path;
     QFuture<QImage> future = QtConcurrent::run([path] {
       QString error;
-      QImage image =
-          IsSshImageUrl(path) ? LoadSshImage(path, &error) : QImage(path);
+      QImage image;
+      if (IsSshImageUrl(path)) {
+        image = LoadSshImage(path, &error);
+      } else {
+        QImageReader reader(path);
+        reader.setAutoTransform(true);
+        image = reader.read();
+      }
       if (image.isNull()) {
         qWarning() << "Failed to load image:" << path << error;
       }

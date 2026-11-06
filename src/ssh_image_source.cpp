@@ -1,5 +1,7 @@
 #include "ssh_image_source.hpp"
 
+#include <QBuffer>
+#include <QImageReader>
 #include <QProcess>
 #include <QUrl>
 
@@ -220,8 +222,11 @@ QImage LoadSshImage(QString const& image_url, QString* error) {
     return {};
   }
 
-  QImage image;
-  if (!image.loadFromData(output)) {
+  QBuffer buffer(&output);
+  QImageReader reader(&buffer);
+  reader.setAutoTransform(true);
+  QImage image = reader.read();
+  if (image.isNull()) {
     if (error != nullptr) {
       *error = QStringLiteral("Failed to decode remote image: ") + image_url;
     }

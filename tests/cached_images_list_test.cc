@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <QBuffer>
 #include <QColor>
 #include <QFile>
 #include <QImage>
@@ -105,6 +106,36 @@ TEST_F(CachedImagesListTest, DecodesAndDisplaysRealPixmap) {
   ASSERT_FALSE(displayed_.isNull());
   EXPECT_EQ(displayed_.size(), QSize(kW, kH));
   EXPECT_EQ(DisplayedIndex(), 0);
+}
+
+TEST_F(CachedImagesListTest, AppliesExifOrientation) {
+  QImage image(kW, kH, QImage::Format_RGB32);
+  image.fill(Qt::red);
+  for (int y = kH / 2; y < kH; ++y) {
+    for (int x = 0; x < kW; ++x) image.setPixelColor(x, y, Qt::blue);
+  }
+
+  QByteArray jpeg;
+  QBuffer buffer(&jpeg);
+  ASSERT_TRUE(buffer.open(QIODevice::WriteOnly));
+  ASSERT_TRUE(image.save(&buffer, "JPEG"));
+  buffer.close();
+  // APP1 EXIF segment: little-endian TIFF with Orientation = 6 (90° CW).
+  jpeg.insert(2, QByteArray::fromHex(
+                     "ffe1002245786966000049492a0008000000010012010300"
+                     "010000000600000000000000"));
+  QString path = tmp_.filePath(QStringLiteral("oriented.jpg"));
+  QFile file(path);
+  ASSERT_TRUE(file.open(QIODevice::WriteOnly));
+  ASSERT_EQ(file.write(jpeg), jpeg.size());
+  file.close();
+
+  Build({path}, /*capacity=*/1, /*start=*/1);
+  cache_->DisplayImage();
+  ASSERT_EQ(displayed_.size(), QSize(kH, kW));
+  QImage displayed = displayed_.toImage();
+  EXPECT_GT(displayed.pixelColor(kH / 4, kW / 2).blue(), 200);
+  EXPECT_GT(displayed.pixelColor(3 * kH / 4, kW / 2).red(), 200);
 }
 
 // Sliding the window forward (push_back + pop_front on both lists) must keep
